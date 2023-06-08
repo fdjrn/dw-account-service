@@ -1,0 +1,32 @@
+
+{
+  "appName": "",
+  "server" : {
+    "port" : ""
+  },
+  "database" : {
+    "mongodb": {
+      "uri" : "",
+      "dbName": ""
+    }
+  },
+  "kafka": {
+    "mode": "",
+    "brokers": "",
+    "sasl" : {
+      "enable": true/false,
+      "algorithm" : "sha256/sha512",
+      "user" : "",
+      "password": ""
+    },
+    "tls" : {
+      "enable": true/false,
+      "insecureSkipVerify": true/false
+    },
+    "producer" : {
+      "idempotent" : true,
+      "retryMax" : 1
+    }
+
+  }
+}
