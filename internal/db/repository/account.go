@@ -115,10 +115,10 @@ func (a *Account) FindByActiveStatus(id string, status bool) (int, interface{}, 
 }
 
 func (a *Account) DeactivateAccount(u *entity.UnregisterAccount) (int, error) {
-	//id, _ := primitive.ObjectIDFromHex(u.MDLUniqueID)
+	//id, _ := primitive.ObjectIDFromHex(u.UniqueID)
 
 	// filter condition
-	filter := bson.D{{"uniqueId", u.MDLUniqueID}}
+	filter := bson.D{{"uniqueId", u.UniqueID}}
 
 	// update field
 	update := bson.D{
@@ -166,7 +166,7 @@ func (a *Account) InsertDeactivatedAccount(account *entity.UnregisterAccount) (i
 }
 
 func (a *Account) RemoveDeactivatedAccount(acc *entity.UnregisterAccount) (int, error) {
-	filter := bson.D{{"uniqueId", acc.MDLUniqueID}}
+	filter := bson.D{{"uniqueId", acc.UniqueID}}
 	result, err := db.Mongo.Collection.UnregisterAccount.DeleteOne(context.TODO(), filter)
 
 	if err != nil {

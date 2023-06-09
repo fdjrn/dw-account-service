@@ -53,7 +53,7 @@ func TopupBalance(c *fiber.Ctx) error {
 	}
 
 	// 2. inquiry balance
-	code, b, err := repository.BalanceRepository.Inquiry(t.MDLUniqueID)
+	code, b, err := repository.BalanceRepository.Inquiry(t.UniqueID)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
@@ -84,7 +84,7 @@ func TopupBalance(c *fiber.Ctx) error {
 	}
 
 	// 6. do update document on Account Collection
-	code, err = repository.BalanceRepository.UpdateBalance(t.MDLUniqueID, t.LastBalanceEncrypted)
+	code, err = repository.BalanceRepository.UpdateBalance(t.UniqueID, t.LastBalanceEncrypted)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
@@ -122,7 +122,7 @@ func DeductBalance(c *fiber.Ctx) error {
 	}
 
 	// 1. Inquiry Balance
-	_, b, err := repository.BalanceRepository.Inquiry(d.MDLUniqueID)
+	_, b, err := repository.BalanceRepository.Inquiry(d.UniqueID)
 	if err != nil {
 		return c.Status(500).JSON(Responses{
 			Success: false,
@@ -146,7 +146,7 @@ func DeductBalance(c *fiber.Ctx) error {
 	d.LastBalanceEncrypted, _ = tools.Encrypt([]byte(b.SecretKey), fmt.Sprintf("%016s", strLastBalance))
 
 	// 4. Update document
-	code, err := repository.BalanceRepository.UpdateBalance(d.MDLUniqueID, d.LastBalanceEncrypted)
+	code, err := repository.BalanceRepository.UpdateBalance(d.UniqueID, d.LastBalanceEncrypted)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
@@ -155,7 +155,7 @@ func DeductBalance(c *fiber.Ctx) error {
 		})
 	}
 	// 5. Fetch updated document
-	_, b, _ = repository.BalanceRepository.Inquiry(d.MDLUniqueID)
+	_, b, _ = repository.BalanceRepository.Inquiry(d.UniqueID)
 
 	// 6. Populate response data
 	// untuk PoC masih Hardcoded dulu...

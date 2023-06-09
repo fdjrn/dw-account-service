@@ -57,7 +57,7 @@ func Register(c *fiber.Ctx) error {
 		})
 	}
 
-	if isRegistered(a.MDLUniqueID) {
+	if isRegistered(a.UniqueID) {
 		return c.Status(400).JSON(Responses{
 			Success: false,
 			Message: "uniqueId has already been registered",
@@ -111,7 +111,7 @@ func Unregister(c *fiber.Ctx) error {
 	}
 
 	// check if already been unregistered
-	if isUnregistered(u.MDLUniqueID) {
+	if isUnregistered(u.UniqueID) {
 		return c.Status(400).JSON(Responses{
 			Success: false,
 			Message: "account has already been unregistered",
@@ -130,7 +130,7 @@ func Unregister(c *fiber.Ctx) error {
 	// insert into accountDeactivated collection
 	code, _, err = repository.AccountRepository.InsertDeactivatedAccount(u)
 
-	_, updatedAccount, _ := repository.AccountRepository.FindByUniqueID(u.MDLUniqueID, false)
+	_, updatedAccount, _ := repository.AccountRepository.FindByUniqueID(u.UniqueID, false)
 
 	return c.Status(code).JSON(Responses{
 		Success: true,

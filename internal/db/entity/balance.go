@@ -2,7 +2,7 @@ package entity
 
 type BalanceInquiry struct {
 	ID             string `json:"accountId,omitempty" bson:"_id,omitempty"`
-	MDLUniqueID    string `json:"uniqueId,omitempty" bson:"uniqueId,omitempty"`
+	UniqueID       string `json:"uniqueId,omitempty" bson:"uniqueId,omitempty"`
 	SecretKey      string `json:"-" bson:"secretKey,omitempty"`
 	LastBalance    string `json:"-" bson:"lastBalance,omitempty"`
 	CurrentBalance int64  `json:"currentBalance" bson:"-"`
@@ -14,7 +14,7 @@ type BalanceTopUp struct {
 	ID string `json:"accountId,omitempty" bson:"_id,omitempty"`
 
 	// Unique ID yang didapat dari MDL MyDigiLearn yang terdaftar
-	MDLUniqueID string `json:"uniqueId,omitempty" bson:"uniqueId,omitempty"`
+	UniqueID string `json:"uniqueId,omitempty" bson:"uniqueId,omitempty"`
 
 	// Amount of topup
 	Amount int `json:"topupAmount" bson:"topupAmount,omitempty"`
@@ -46,7 +46,7 @@ type BalanceTopUp struct {
 
 type BalanceDeduction struct {
 	ID                   string `json:"accountId,omitempty" bson:"_id,omitempty"`
-	MDLUniqueID          string `json:"uniqueId," bson:"uniqueId"`
+	UniqueID             string `json:"uniqueId," bson:"uniqueId"`
 	Amount               int    `json:"amount"`
 	MerchantID           int    `json:"merchantID,omitempty"`
 	TransType            int    `json:"transType"`
