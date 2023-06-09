@@ -1,7 +1,7 @@
 package routes
 
 import (
-	"github.com/dw-account-service/internal/handlers/account"
+	"github.com/dw-account-service/internal/handlers"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -9,11 +9,11 @@ func initAccountRoutes(router fiber.Router) {
 	r := router.Group("/account")
 
 	r.Post("/register", func(c *fiber.Ctx) error {
-		return account.Register(c)
+		return handlers.Register(c)
 	})
 
 	r.Post("/unregister", func(c *fiber.Ctx) error {
-		return account.Unregister(c)
+		return handlers.Unregister(c)
 	})
 
 	// it can use query params to filter their active status
@@ -23,15 +23,15 @@ func initAccountRoutes(router fiber.Router) {
 	//	api/v1/account?active=false --> to fetch only unregistered account
 	//	api/v1/account 				--> to fetch all registered account whether its active or unregistered
 	r.Get("", func(c *fiber.Ctx) error {
-		return account.GetAllRegisteredAccount(c)
+		return handlers.GetAllRegisteredAccount(c)
 	})
 
 	r.Get("/:id", func(c *fiber.Ctx) error {
-		return account.GetRegisteredAccount(c)
+		return handlers.GetRegisteredAccount(c)
 	})
 
 	r.Get("/uid/:uid", func(c *fiber.Ctx) error {
-		return account.GetRegisteredAccountByUID(c)
+		return handlers.GetRegisteredAccountByUID(c)
 	})
 
 }

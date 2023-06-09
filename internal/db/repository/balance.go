@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
-	"github.com/dw-account-service/internal/conn/mongodb"
+	"github.com/dw-account-service/internal/db"
 	"github.com/dw-account-service/internal/db/entity"
 	"github.com/dw-account-service/pkg/tools"
 	"github.com/gofiber/fiber/v2"
@@ -13,10 +13,10 @@ import (
 	"time"
 )
 
-type BalanceRepository struct {
+type Balance struct {
 }
 
-func (b *BalanceRepository) Inquiry(uid string) (int, entity.BalanceInquiry, error) {
+func (b *Balance) Inquiry(uid string) (int, entity.BalanceInquiry, error) {
 
 	//id, _ := primitive.ObjectIDFromHex(uid)
 
@@ -24,7 +24,7 @@ func (b *BalanceRepository) Inquiry(uid string) (int, entity.BalanceInquiry, err
 	filter := bson.D{{"uniqueId", uid}, {"active", true}}
 
 	var balance entity.BalanceInquiry
-	err := mongodb.Collection.Account.FindOne(
+	err := db.Mongo.Collection.Account.FindOne(
 		context.Background(),
 		filter,
 	).Decode(&balance)
@@ -44,7 +44,7 @@ func (b *BalanceRepository) Inquiry(uid string) (int, entity.BalanceInquiry, err
 }
 
 // UpdateBalance is a function that update lastBalance field based on supplied uniqueId
-func (b *BalanceRepository) UpdateBalance(uid string, lastBalance string) (int, error) {
+func (b *Balance) UpdateBalance(uid string, lastBalance string) (int, error) {
 
 	// 1. update balance on current document
 	filter := bson.D{{"uniqueId", uid}}
@@ -55,7 +55,7 @@ func (b *BalanceRepository) UpdateBalance(uid string, lastBalance string) (int, 
 		}},
 	}
 
-	result, err := mongodb.Collection.Account.UpdateOne(context.TODO(), filter, update)
+	result, err := db.Mongo.Collection.Account.UpdateOne(context.TODO(), filter, update)
 	if err != nil {
 		return fiber.StatusInternalServerError, err
 	}

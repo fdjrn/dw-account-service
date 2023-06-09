@@ -1,7 +1,7 @@
 package routes
 
 import (
-	"github.com/dw-account-service/internal/handlers/balances"
+	"github.com/dw-account-service/internal/handlers"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -9,17 +9,17 @@ func initBalanceRoutes(router fiber.Router) {
 	r := router.Group("/account/balance")
 
 	r.Get("/inquiry/:uid", func(c *fiber.Ctx) error {
-		return balances.InquiryBalance(c)
+		return handlers.InquiryBalance(c)
 	})
 
 	// balance transaction
 	// ---------------------------------------------------------------
 	r.Post("/topup", func(c *fiber.Ctx) error {
-		return balances.TopupBalance(c)
+		return handlers.TopupBalance(c)
 	})
 
 	r.Post("/deduct", func(c *fiber.Ctx) error {
-		return balances.DeductBalance(c)
+		return handlers.DeductBalance(c)
 	})
 
 	// temporary commented out

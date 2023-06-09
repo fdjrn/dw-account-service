@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"github.com/dw-account-service/internal/conn/mongodb"
+	"github.com/dw-account-service/internal/db"
 	"github.com/dw-account-service/internal/db/entity"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
@@ -13,7 +13,7 @@ type Topup struct {
 }
 
 func (t *Topup) CreateTopupDocument(e *entity.BalanceTopUp) (int, error) {
-	_, err := mongodb.Collection.BalanceTopup.InsertOne(context.TODO(), e)
+	_, err := db.Mongo.Collection.BalanceTopup.InsertOne(context.TODO(), e)
 
 	if err != nil {
 		return fiber.StatusInternalServerError, err
@@ -28,7 +28,7 @@ func (t *Topup) IsUsedExRefNumber(refNo string) bool {
 	filter := bson.D{{"exRefNumber", refNo}}
 
 	topup := new(entity.BalanceTopUp)
-	err := mongodb.Collection.BalanceTopup.FindOne(context.TODO(), filter).Decode(&topup)
+	err := db.Mongo.Collection.BalanceTopup.FindOne(context.TODO(), filter).Decode(&topup)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return false

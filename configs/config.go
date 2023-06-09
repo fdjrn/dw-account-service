@@ -54,8 +54,8 @@ type AppConfig struct {
 
 var MainConfig AppConfig
 
-func InitConfig() error {
-	//log.Println("[CONFIG] trying to load configuration file")
+func Initialize() error {
+
 	viper.SetConfigType("json")
 	viper.AddConfigPath("./")
 	viper.SetConfigName("config")

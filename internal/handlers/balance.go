@@ -1,12 +1,11 @@
-package balances
+package handlers
 
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/dw-account-service/internal/broker"
 	"github.com/dw-account-service/internal/db/entity"
 	"github.com/dw-account-service/internal/db/repository"
-	"github.com/dw-account-service/internal/handlers"
+	"github.com/dw-account-service/internal/kafka"
 	"github.com/dw-account-service/pkg/tools"
 	"github.com/gofiber/fiber/v2"
 	"log"
@@ -14,22 +13,17 @@ import (
 	"time"
 )
 
-var (
-	balanceRepo = repository.BalanceRepository{}
-	topupRepo   = repository.Topup{}
-)
-
 func InquiryBalance(c *fiber.Ctx) error {
-	code, account, err := balanceRepo.Inquiry(c.Params("uid"))
+	code, account, err := repository.BalanceRepository.Inquiry(c.Params("uid"))
 	if err != nil {
-		return c.Status(code).JSON(handlers.Responses{
+		return c.Status(code).JSON(Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
 		})
 	}
 
-	return c.Status(code).JSON(handlers.Responses{
+	return c.Status(code).JSON(Responses{
 		Success: true,
 		Message: "balance successfully fetched",
 		Data:    account,
@@ -42,7 +36,7 @@ func TopupBalance(c *fiber.Ctx) error {
 
 	// parse body payload
 	if err := c.BodyParser(t); err != nil {
-		return c.Status(400).JSON(handlers.Responses{
+		return c.Status(400).JSON(Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -50,8 +44,8 @@ func TopupBalance(c *fiber.Ctx) error {
 	}
 
 	// 1. check used exRefNumber
-	if topupRepo.IsUsedExRefNumber(t.ExRefNumber) {
-		return c.Status(400).JSON(handlers.Responses{
+	if repository.TopupRepository.IsUsedExRefNumber(t.ExRefNumber) {
+		return c.Status(400).JSON(Responses{
 			Success: false,
 			Message: "exRefNumber already used",
 			Data:    t,
@@ -59,9 +53,9 @@ func TopupBalance(c *fiber.Ctx) error {
 	}
 
 	// 2. inquiry balance
-	code, b, err := balanceRepo.Inquiry(t.MDLUniqueID)
+	code, b, err := repository.BalanceRepository.Inquiry(t.MDLUniqueID)
 	if err != nil {
-		return c.Status(code).JSON(handlers.Responses{
+		return c.Status(code).JSON(Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -80,9 +74,9 @@ func TopupBalance(c *fiber.Ctx) error {
 	t.UpdatedAt = t.CreatedAt
 
 	// 5. insert topup document
-	code, err = topupRepo.CreateTopupDocument(t)
+	code, err = repository.TopupRepository.CreateTopupDocument(t)
 	if err != nil {
-		return c.Status(code).JSON(handlers.Responses{
+		return c.Status(code).JSON(Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -90,9 +84,9 @@ func TopupBalance(c *fiber.Ctx) error {
 	}
 
 	// 6. do update document on Account Collection
-	code, err = balanceRepo.UpdateBalance(t.MDLUniqueID, t.LastBalanceEncrypted)
+	code, err = repository.BalanceRepository.UpdateBalance(t.MDLUniqueID, t.LastBalanceEncrypted)
 	if err != nil {
-		return c.Status(code).JSON(handlers.Responses{
+		return c.Status(code).JSON(Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -105,9 +99,9 @@ func TopupBalance(c *fiber.Ctx) error {
 		log.Println("cannot marshal payload: ", err.Error())
 	}
 
-	_ = broker.ProduceMsg(broker.TopUpTopic, payload)
+	_ = kafka.ProduceMsg(kafka.TopUpTopic, payload)
 
-	return c.Status(code).JSON(handlers.Responses{
+	return c.Status(code).JSON(Responses{
 		Success: true,
 		Message: "account balance has been top-up successfully",
 		Data:    t,
@@ -120,7 +114,7 @@ func DeductBalance(c *fiber.Ctx) error {
 
 	// parse body payload
 	if err := c.BodyParser(d); err != nil {
-		return c.Status(400).JSON(handlers.Responses{
+		return c.Status(400).JSON(Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -128,9 +122,9 @@ func DeductBalance(c *fiber.Ctx) error {
 	}
 
 	// 1. Inquiry Balance
-	_, b, err := balanceRepo.Inquiry(d.MDLUniqueID)
+	_, b, err := repository.BalanceRepository.Inquiry(d.MDLUniqueID)
 	if err != nil {
-		return c.Status(500).JSON(handlers.Responses{
+		return c.Status(500).JSON(Responses{
 			Success: false,
 			Message: "failed to inquiry last balance on current account",
 			Data:    nil,
@@ -138,7 +132,7 @@ func DeductBalance(c *fiber.Ctx) error {
 	}
 	// 2. Jika saldo cukup, maka lanjutkan proses pengurangan saldo (pembayaran)
 	if b.CurrentBalance < int64(d.Amount) {
-		return c.Status(500).JSON(handlers.Responses{
+		return c.Status(500).JSON(Responses{
 			Success: false,
 			Message: "current balance is less than current transaction amount",
 			Data:    &b,
@@ -152,16 +146,16 @@ func DeductBalance(c *fiber.Ctx) error {
 	d.LastBalanceEncrypted, _ = tools.Encrypt([]byte(b.SecretKey), fmt.Sprintf("%016s", strLastBalance))
 
 	// 4. Update document
-	code, err := balanceRepo.UpdateBalance(d.MDLUniqueID, d.LastBalanceEncrypted)
+	code, err := repository.BalanceRepository.UpdateBalance(d.MDLUniqueID, d.LastBalanceEncrypted)
 	if err != nil {
-		return c.Status(code).JSON(handlers.Responses{
+		return c.Status(code).JSON(Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
 		})
 	}
 	// 5. Fetch updated document
-	_, b, _ = balanceRepo.Inquiry(d.MDLUniqueID)
+	_, b, _ = repository.BalanceRepository.Inquiry(d.MDLUniqueID)
 
 	// 6. Populate response data
 	// untuk PoC masih Hardcoded dulu...
@@ -178,9 +172,9 @@ func DeductBalance(c *fiber.Ctx) error {
 		log.Println("cannot marshal payload: ", err.Error())
 	}
 
-	_ = broker.ProduceMsg(broker.DeductTopic, payload)
+	_ = kafka.ProduceMsg(kafka.DeductTopic, payload)
 
-	return c.Status(200).JSON(handlers.Responses{
+	return c.Status(200).JSON(Responses{
 		Success: true,
 		Message: "balance has been successfully deducted",
 		Data:    d,

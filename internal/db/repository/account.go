@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
-	"github.com/dw-account-service/internal/conn/mongodb"
+	"github.com/dw-account-service/internal/db"
 	"github.com/dw-account-service/internal/db/entity"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
@@ -12,14 +12,14 @@ import (
 	"time"
 )
 
-type AccountRepository struct {
+type Account struct {
 }
 
-func (a *AccountRepository) findByFilter(filter interface{}) (interface{}, error) {
+func (a *Account) findByFilter(filter interface{}) (interface{}, error) {
 	account := new(entity.AccountBalance)
 
 	// filter condition
-	err := mongodb.Collection.Account.FindOne(context.TODO(), filter).Decode(&account)
+	err := db.Mongo.Collection.Account.FindOne(context.TODO(), filter).Decode(&account)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, err
@@ -30,7 +30,7 @@ func (a *AccountRepository) findByFilter(filter interface{}) (interface{}, error
 	return account, nil
 }
 
-func (a *AccountRepository) FindAll(queryParams string) (int, interface{}, error) {
+func (a *Account) FindAll(queryParams string) (int, interface{}, error) {
 	filter := bson.D{}
 
 	if queryParams != "" {
@@ -40,7 +40,7 @@ func (a *AccountRepository) FindAll(queryParams string) (int, interface{}, error
 		}
 	}
 
-	cursor, err := mongodb.Collection.Account.Find(
+	cursor, err := db.Mongo.Collection.Account.Find(
 		context.TODO(), filter,
 		options.Find().SetProjection(bson.D{{"secretKey", 0}, {"lastBalance", 0}}),
 	)
@@ -58,7 +58,7 @@ func (a *AccountRepository) FindAll(queryParams string) (int, interface{}, error
 
 // FindByID : id args accept interface{} or primitive.ObjectID
 // make sure to convert it first
-func (a *AccountRepository) FindByID(id interface{}, active bool) (int, interface{}, error) {
+func (a *Account) FindByID(id interface{}, active bool) (int, interface{}, error) {
 	// filter condition
 	filter := bson.D{{"_id", id}}
 	if active {
@@ -76,7 +76,7 @@ func (a *AccountRepository) FindByID(id interface{}, active bool) (int, interfac
 	return fiber.StatusOK, account, nil
 }
 
-func (a *AccountRepository) FindByUniqueID(id string, active bool) (int, interface{}, error) {
+func (a *Account) FindByUniqueID(id string, active bool) (int, interface{}, error) {
 
 	filter := bson.D{{"uniqueId", id}}
 	if active {
@@ -95,7 +95,7 @@ func (a *AccountRepository) FindByUniqueID(id string, active bool) (int, interfa
 	return fiber.StatusOK, account, nil
 }
 
-func (a *AccountRepository) FindByActiveStatus(id string, status bool) (int, interface{}, error) {
+func (a *Account) FindByActiveStatus(id string, status bool) (int, interface{}, error) {
 	//id, _ := primitive.ObjectIDFromHex(accountId)
 
 	account, err := a.findByFilter(bson.D{
@@ -114,7 +114,7 @@ func (a *AccountRepository) FindByActiveStatus(id string, status bool) (int, int
 	return fiber.StatusOK, account, nil
 }
 
-func (a *AccountRepository) DeactivateAccount(u *entity.UnregisterAccount) (int, error) {
+func (a *Account) DeactivateAccount(u *entity.UnregisterAccount) (int, error) {
 	//id, _ := primitive.ObjectIDFromHex(u.MDLUniqueID)
 
 	// filter condition
@@ -128,7 +128,7 @@ func (a *AccountRepository) DeactivateAccount(u *entity.UnregisterAccount) (int,
 		}},
 	}
 
-	result, err := mongodb.Collection.Account.UpdateOne(context.TODO(), filter, update)
+	result, err := db.Mongo.Collection.Account.UpdateOne(context.TODO(), filter, update)
 	if err != nil {
 		return fiber.StatusInternalServerError, err
 	}
@@ -141,21 +141,9 @@ func (a *AccountRepository) DeactivateAccount(u *entity.UnregisterAccount) (int,
 	return fiber.StatusOK, nil
 }
 
-func (a *AccountRepository) InsertDocument(account *entity.AccountBalance) (int, interface{}, error) {
+func (a *Account) InsertDocument(account *entity.AccountBalance) (int, interface{}, error) {
 
-	result, err := mongodb.Collection.Account.InsertOne(context.TODO(), account)
-
-	if err != nil {
-		return fiber.StatusInternalServerError, nil, err
-	}
-
-	return fiber.StatusCreated, result.InsertedID, nil
-
-}
-
-func (a *AccountRepository) InsertDeactivatedAccount(account *entity.UnregisterAccount) (int, interface{}, error) {
-
-	result, err := mongodb.Collection.UnregisterAccount.InsertOne(context.TODO(), account)
+	result, err := db.Mongo.Collection.Account.InsertOne(context.TODO(), account)
 
 	if err != nil {
 		return fiber.StatusInternalServerError, nil, err
@@ -165,9 +153,21 @@ func (a *AccountRepository) InsertDeactivatedAccount(account *entity.UnregisterA
 
 }
 
-func (a *AccountRepository) RemoveDeactivatedAccount(acc *entity.UnregisterAccount) (int, error) {
+func (a *Account) InsertDeactivatedAccount(account *entity.UnregisterAccount) (int, interface{}, error) {
+
+	result, err := db.Mongo.Collection.UnregisterAccount.InsertOne(context.TODO(), account)
+
+	if err != nil {
+		return fiber.StatusInternalServerError, nil, err
+	}
+
+	return fiber.StatusCreated, result.InsertedID, nil
+
+}
+
+func (a *Account) RemoveDeactivatedAccount(acc *entity.UnregisterAccount) (int, error) {
 	filter := bson.D{{"uniqueId", acc.MDLUniqueID}}
-	result, err := mongodb.Collection.UnregisterAccount.DeleteOne(context.TODO(), filter)
+	result, err := db.Mongo.Collection.UnregisterAccount.DeleteOne(context.TODO(), filter)
 
 	if err != nil {
 		return fiber.StatusInternalServerError, err

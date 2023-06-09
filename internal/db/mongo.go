@@ -1,4 +1,4 @@
-package mongodb
+package db
 
 import (
 	"context"
@@ -11,15 +11,16 @@ import (
 	"time"
 )
 
-type MgoCollection struct {
+type MongoCollection struct {
 	Account           *mongo.Collection
 	UnregisterAccount *mongo.Collection
 	BalanceTopup      *mongo.Collection
 }
 
-type MgoInstance struct {
-	Client *mongo.Client
-	DB     *mongo.Database
+type MongoInstance struct {
+	Client     *mongo.Client
+	DB         *mongo.Database
+	Collection MongoCollection
 }
 
 const (
@@ -28,10 +29,9 @@ const (
 	BalanceTopupCollection      = "balanceTopup"
 )
 
-var Instance MgoInstance
-var Collection MgoCollection
+var Mongo MongoInstance
 
-func (i *MgoInstance) Connect() error {
+func (i *MongoInstance) Connect() error {
 	client, err := mongo.NewClient(options.Client().ApplyURI(configs.MainConfig.Database.Mongo.Uri).
 		SetServerAPIOptions(options.ServerAPI(options.ServerAPIVersion1)))
 
@@ -52,15 +52,15 @@ func (i *MgoInstance) Connect() error {
 		return err
 	}
 
-	Instance = MgoInstance{
+	db := client.Database(configs.MainConfig.Database.Mongo.DBName)
+	Mongo = MongoInstance{
 		Client: client,
-		DB:     client.Database(configs.MainConfig.Database.Mongo.DBName),
-	}
-
-	Collection = MgoCollection{
-		Account:           Instance.DB.Collection(AccountCollection),
-		UnregisterAccount: Instance.DB.Collection(UnregisterAccountCollection),
-		BalanceTopup:      Instance.DB.Collection(BalanceTopupCollection),
+		DB:     db,
+		Collection: MongoCollection{
+			Account:           db.Collection(AccountCollection),
+			UnregisterAccount: db.Collection(UnregisterAccountCollection),
+			BalanceTopup:      db.Collection(BalanceTopupCollection),
+		},
 	}
 
 	log.Println("[INIT] database >> connected")
@@ -68,12 +68,12 @@ func (i *MgoInstance) Connect() error {
 	return nil
 }
 
-func (i *MgoInstance) Disconnect() error {
-	if Instance.Client == nil {
+func (i *MongoInstance) Disconnect() error {
+	if Mongo.Client == nil {
 		return nil
 	}
 
-	err := Instance.Client.Disconnect(context.TODO())
+	err := Mongo.Client.Disconnect(context.TODO())
 	if err != nil {
 		log.Println("error on closing mongodb connection: ", err.Error())
 		return err
