@@ -21,16 +21,22 @@ func (a *Account) findByFilter(filter interface{}) (interface{}, error) {
 	// filter condition
 	err := db.Mongo.Collection.Account.FindOne(context.TODO(), filter).Decode(&account)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return nil, err
-		}
 		return nil, err
 	}
 
 	return account, nil
 }
 
-func (a *Account) FindAll(queryParams string) (int, interface{}, error) {
+/*
+in-params ->	queryParams: string
+out-params ->
+
+	code: int,
+	accounts: interface{},
+	length: int,
+	err: error
+*/
+func (a *Account) FindAll(queryParams string) (int, interface{}, int, error) {
 	filter := bson.D{}
 
 	if queryParams != "" {
@@ -45,15 +51,15 @@ func (a *Account) FindAll(queryParams string) (int, interface{}, error) {
 		options.Find().SetProjection(bson.D{{"secretKey", 0}, {"lastBalance", 0}}),
 	)
 	if err != nil {
-		return fiber.StatusInternalServerError, nil, err
+		return fiber.StatusInternalServerError, nil, 0, err
 	}
 
 	var accounts []entity.AccountBalance
 	if err = cursor.All(context.TODO(), &accounts); err != nil {
-		return fiber.StatusInternalServerError, nil, err
+		return fiber.StatusInternalServerError, nil, 0, err
 	}
 
-	return fiber.StatusOK, &accounts, nil
+	return fiber.StatusOK, &accounts, len(accounts), nil
 }
 
 // FindByID : id args accept interface{} or primitive.ObjectID
@@ -67,9 +73,6 @@ func (a *Account) FindByID(id interface{}, active bool) (int, interface{}, error
 
 	account, err := a.findByFilter(filter)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return fiber.StatusNotFound, nil, err
-		}
 		return fiber.StatusInternalServerError, nil, err
 	}
 
@@ -100,15 +103,11 @@ func (a *Account) FindByActiveStatus(id string, status bool) (int, interface{}, 
 	//id, _ := primitive.ObjectIDFromHex(accountId)
 
 	account, err := a.findByFilter(bson.D{
-		//{Key: "_id", Value: id},
 		{Key: "uniqueId", Value: id},
 		{Key: "active", Value: status},
 	})
 
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return fiber.StatusNotFound, nil, errors.New("account not found or it has been unregistered")
-		}
 		return fiber.StatusInternalServerError, nil, err
 	}
 

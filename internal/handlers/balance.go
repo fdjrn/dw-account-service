@@ -2,6 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"go.mongodb.org/mongo-driver/mongo"
+
+	"errors"
 	"fmt"
 	"github.com/dw-account-service/internal/db/entity"
 	"github.com/dw-account-service/internal/db/repository"
@@ -13,12 +16,93 @@ import (
 	"time"
 )
 
+func validateRequest(payload interface{}) (interface{}, error) {
+	var msg []string
+
+	switch req := payload.(type) {
+	case *entity.BalanceTopUp:
+		if req.UniqueID == "" {
+			msg = append(msg, "uniqueId cannot be empty.")
+		}
+
+		if req.Amount == 0 {
+			msg = append(msg, "topup amount must be greater than 0.")
+		}
+
+		if req.InRefNumber == "" {
+			msg = append(msg, "inRefNumber cannot be empty.")
+		}
+
+		if req.ExRefNumber == "" {
+			msg = append(msg, "exRefNumber cannot be empty.")
+		}
+
+		if req.TransDate == 0 {
+			msg = append(msg, "exRefNumber must be greater than 0.")
+		}
+
+		if len(msg) > 0 {
+			return msg, errors.New("request validation status failed")
+		}
+
+		return msg, nil
+
+	case *entity.BalanceDeduction:
+		if req.UniqueID == "" {
+			msg = append(msg, "uniqueId cannot be empty.")
+		}
+
+		if req.Amount == 0 {
+			msg = append(msg, "topup amount must be greater than 0.")
+		}
+
+		if req.TransType == 0 {
+			msg = append(msg, "transType cannot be empty.")
+		}
+
+		if req.Description == "" {
+			msg = append(msg, "transaction description cannot be empty.")
+		}
+
+		if req.InvoiceNumber == "" {
+			msg = append(msg, "invoiceNumber cannot be empty.")
+		}
+
+		if len(msg) > 0 {
+			return msg, errors.New("request validation status failed")
+		}
+
+		return msg, nil
+	default:
+		return msg, nil
+	}
+
+}
+
 func InquiryBalance(c *fiber.Ctx) error {
-	code, account, err := repository.BalanceRepository.Inquiry(c.Params("uid"))
+
+	uid := c.Params("uid")
+	if uid == "" {
+		return c.Status(400).JSON(Responses{
+			Success: false,
+			Message: "uniqueId cannot be empty",
+			Data:    nil,
+		})
+	}
+
+	code, account, err := repository.BalanceRepository.Inquiry(uid)
 	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return c.Status(code).JSON(Responses{
+				Success: false,
+				Message: "balance not found or it has been unregistered",
+				Data:    nil,
+			})
+		}
+
 		return c.Status(code).JSON(Responses{
 			Success: false,
-			Message: err.Error(),
+			Message: "failed to inquiry last balance on current account",
 			Data:    nil,
 		})
 	}
@@ -40,6 +124,18 @@ func TopupBalance(c *fiber.Ctx) error {
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
+		})
+	}
+
+	// validate request
+	m, err := validateRequest(t)
+	if err != nil {
+		return c.Status(400).JSON(Responses{
+			Success: false,
+			Message: err.Error(),
+			Data: map[string]interface{}{
+				"errors": m,
+			},
 		})
 	}
 
@@ -121,9 +217,29 @@ func DeductBalance(c *fiber.Ctx) error {
 		})
 	}
 
-	// 1. Inquiry Balance
-	_, b, err := repository.BalanceRepository.Inquiry(d.UniqueID)
+	// validate request
+	m, err := validateRequest(d)
 	if err != nil {
+		return c.Status(400).JSON(Responses{
+			Success: false,
+			Message: err.Error(),
+			Data: map[string]interface{}{
+				"errors": m,
+			},
+		})
+	}
+
+	// 1. Inquiry Balance
+	code, b, err := repository.BalanceRepository.Inquiry(d.UniqueID)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return c.Status(code).JSON(Responses{
+				Success: false,
+				Message: "balance not found or it has been unregistered",
+				Data:    nil,
+			})
+		}
+
 		return c.Status(500).JSON(Responses{
 			Success: false,
 			Message: "failed to inquiry last balance on current account",
@@ -146,7 +262,7 @@ func DeductBalance(c *fiber.Ctx) error {
 	d.LastBalanceEncrypted, _ = tools.Encrypt([]byte(b.SecretKey), fmt.Sprintf("%016s", strLastBalance))
 
 	// 4. Update document
-	code, err := repository.BalanceRepository.UpdateBalance(d.UniqueID, d.LastBalanceEncrypted)
+	code, err = repository.BalanceRepository.UpdateBalance(d.UniqueID, d.LastBalanceEncrypted)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
@@ -157,12 +273,9 @@ func DeductBalance(c *fiber.Ctx) error {
 	// 5. Fetch updated document
 	_, b, _ = repository.BalanceRepository.Inquiry(d.UniqueID)
 
-	// 6. Populate response data
+	// 6. set default value
 	// untuk PoC masih Hardcoded dulu...
-
 	// TransType --> 1: Pembelian Konten E-Course | 2: TBD
-	// d.TransType = 1
-	// d.Description = "Pembelian Konten e-Course MyDigiLearn"
 	d.ReceiptNumber = tools.GenerateReceiptNumber(tools.TransPayment, "")
 	d.LastBalance = b.CurrentBalance
 

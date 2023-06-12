@@ -159,11 +159,12 @@ func GetAllRegisteredAccount(c *fiber.Ctx) error {
 		}
 	}
 
-	code, accounts, err := repository.AccountRepository.FindAll(queryParams)
+	code, accounts, count, err := repository.AccountRepository.FindAll(queryParams)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
 			Message: err.Error(),
+			Total:   count,
 			Data:    nil,
 		})
 	}
@@ -173,6 +174,7 @@ func GetAllRegisteredAccount(c *fiber.Ctx) error {
 	return c.Status(code).JSON(Responses{
 		Success: true,
 		Message: msgResponse,
+		Total:   count,
 		Data:    accounts,
 	})
 }
@@ -183,9 +185,13 @@ func GetRegisteredAccount(c *fiber.Ctx) error {
 	code, account, err := repository.AccountRepository.FindByID(id, true)
 
 	if err != nil {
+		errMsg := err.Error()
+		if err == mongo.ErrNoDocuments {
+			errMsg = "account not found or its already been unregistered"
+		}
 		return c.Status(code).JSON(Responses{
 			Success: false,
-			Message: err.Error(),
+			Message: errMsg,
 			Data:    nil,
 		})
 	}
@@ -199,12 +205,17 @@ func GetRegisteredAccount(c *fiber.Ctx) error {
 }
 
 func GetRegisteredAccountByUID(c *fiber.Ctx) error {
-	code, account, err := repository.AccountRepository.FindByUniqueID(c.Params("uid"), true)
+	code, account, err := repository.AccountRepository.FindByActiveStatus(c.Params("uid"), true)
 
 	if err != nil {
+		errMsg := err.Error()
+		if err == mongo.ErrNoDocuments {
+			errMsg = "account not found or its already been unregistered"
+		}
+
 		return c.Status(code).JSON(Responses{
 			Success: false,
-			Message: err.Error(),
+			Message: errMsg,
 			Data:    nil,
 		})
 	}

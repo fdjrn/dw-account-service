@@ -8,8 +8,6 @@ import (
 	"github.com/dw-account-service/pkg/tools"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-
 	"time"
 )
 
@@ -30,9 +28,6 @@ func (b *Balance) Inquiry(uid string) (int, entity.BalanceInquiry, error) {
 	).Decode(&balance)
 
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return fiber.StatusNotFound, entity.BalanceInquiry{}, errors.New("balance not found or it has been unregistered")
-		}
 		return fiber.StatusInternalServerError, entity.BalanceInquiry{}, err
 	}
 
