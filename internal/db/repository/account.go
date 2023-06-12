@@ -87,7 +87,8 @@ func (a *Account) FindByUniqueID(id string, active bool) (int, interface{}, erro
 
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return fiber.StatusNotFound, nil, errors.New("account not found or it has been unregistered")
+			//return fiber.StatusNotFound, nil, errors.New("account not found or it has been unregistered")
+			return fiber.StatusNotFound, nil, err
 		}
 		return fiber.StatusInternalServerError, nil, err
 	}
