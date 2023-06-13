@@ -229,7 +229,7 @@ func GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.Status(code).JSON(Responses{
+	return c.Status(code).JSON(ResponsePayloadPaginated{
 		Success: true,
 		Message: msgResponse,
 		Data: ResponsePayloadDataPaginated{
