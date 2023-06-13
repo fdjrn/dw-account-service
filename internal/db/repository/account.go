@@ -5,10 +5,12 @@ import (
 	"errors"
 	"github.com/dw-account-service/internal/db"
 	"github.com/dw-account-service/internal/db/entity"
+	"github.com/dw-account-service/pkg/payload/request"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"math"
 	"time"
 )
 
@@ -28,8 +30,12 @@ func (a *Account) findByFilter(filter interface{}) (interface{}, error) {
 }
 
 /*
-in-params ->	queryParams: string
-out-params ->
+FindAll
+function args:
+
+	queryParams: string
+
+return:
 
 	code: int,
 	accounts: interface{},
@@ -46,8 +52,10 @@ func (a *Account) FindAll(queryParams string) (int, interface{}, int, error) {
 		}
 	}
 
-	cursor, err := db.Mongo.Collection.Account.Find(
-		context.TODO(), filter,
+	ctx, cancel := context.WithTimeout(context.TODO(), 500*time.Millisecond)
+	defer cancel()
+
+	cursor, err := db.Mongo.Collection.Account.Find(ctx, filter,
 		options.Find().SetProjection(bson.D{{"secretKey", 0}, {"lastBalance", 0}}),
 	)
 	if err != nil {
@@ -60,6 +68,63 @@ func (a *Account) FindAll(queryParams string) (int, interface{}, int, error) {
 	}
 
 	return fiber.StatusOK, &accounts, len(accounts), nil
+}
+
+/*
+FindAllPaginated
+function args:
+
+	*request.PaginatedAccountRequest
+
+return:
+
+	code int,
+	data interfaces{},
+	totalDocument int64,
+	totalPages int,
+	err error
+*/
+func (a *Account) FindAllPaginated(request *request.PaginatedAccountRequest) (int, interface{}, int64, int64, error) {
+	var filter interface{}
+	switch request.Status {
+	case "active":
+		filter = bson.D{{"active", true}}
+	case "unregistered":
+		filter = bson.D{{"active", false}}
+	default:
+		filter = bson.D{}
+	}
+
+	skipValue := (request.Page - 1) * request.Size
+
+	ctx, cancel := context.WithTimeout(context.TODO(), 500*time.Millisecond)
+	defer cancel()
+
+	cursor, err := db.Mongo.Collection.Account.Find(
+		ctx,
+		filter,
+		options.Find().
+			SetProjection(bson.D{{"secretKey", 0}, {"lastBalance", 0}}).
+			SetSkip(skipValue).
+			SetLimit(request.Size),
+	)
+
+	if err != nil {
+		return fiber.StatusInternalServerError, nil, 0, 0, err
+	}
+
+	totalDocs, _ := db.Mongo.Collection.Account.CountDocuments(ctx, filter)
+	var accounts []entity.AccountBalance
+	if err = cursor.All(context.TODO(), &accounts); err != nil {
+		return fiber.StatusInternalServerError, nil, 0, 0, err
+	}
+
+	if len(accounts) == 0 {
+		return fiber.StatusInternalServerError, nil, 0, 0, errors.New("empty results or last pages has been reached")
+	}
+
+	totalPages := math.Ceil(float64(totalDocs) / float64(request.Size))
+	return fiber.StatusOK, &accounts, totalDocs, int64(totalPages), nil
 }
 
 // FindByID : id args accept interface{} or primitive.ObjectID

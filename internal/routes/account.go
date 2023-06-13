@@ -26,6 +26,10 @@ func initAccountRoutes(router fiber.Router) {
 		return handlers.GetAllRegisteredAccount(c)
 	})
 
+	r.Post("/paginated", func(c *fiber.Ctx) error {
+		return handlers.GetAllRegisteredAccountPaginated(c)
+	})
+
 	r.Get("/:id", func(c *fiber.Ctx) error {
 		return handlers.GetRegisteredAccount(c)
 	})

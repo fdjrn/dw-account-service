@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/dw-account-service/internal/db/entity"
 	"github.com/dw-account-service/internal/db/repository"
+	"github.com/dw-account-service/pkg/payload/request"
 	"github.com/dw-account-service/pkg/tools"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -90,7 +91,7 @@ func Register(c *fiber.Ctx) error {
 
 	return c.Status(code).JSON(Responses{
 		Success: true,
-		Message: "account has been successfully registered",
+		Message: "account successfully registered",
 		Data:    createdAccount,
 	})
 }
@@ -134,7 +135,7 @@ func Unregister(c *fiber.Ctx) error {
 
 	return c.Status(code).JSON(Responses{
 		Success: true,
-		Message: "account has been successfully unregistered",
+		Message: "account successfully unregistered",
 		Data:    updatedAccount,
 	})
 }
@@ -144,7 +145,6 @@ func GetAllRegisteredAccount(c *fiber.Ctx) error {
 	accountStatus := ""
 	queryParams := c.Query("active")
 	if queryParams != "" {
-
 		switch strings.ToLower(queryParams) {
 		case "true":
 			accountStatus = "active "
@@ -161,11 +161,13 @@ func GetAllRegisteredAccount(c *fiber.Ctx) error {
 
 	code, accounts, count, err := repository.AccountRepository.FindAll(queryParams)
 	if err != nil {
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(ResponsePayload{
 			Success: false,
 			Message: err.Error(),
-			Total:   count,
-			Data:    nil,
+			Data: ResponsePayloadData{
+				Total:  0,
+				Result: nil,
+			},
 		})
 	}
 
@@ -174,8 +176,69 @@ func GetAllRegisteredAccount(c *fiber.Ctx) error {
 	return c.Status(code).JSON(Responses{
 		Success: true,
 		Message: msgResponse,
-		Total:   count,
-		Data:    accounts,
+		Data: ResponsePayloadData{
+			Total:  count,
+			Result: accounts,
+		},
+	})
+}
+
+func GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
+
+	var req = new(request.PaginatedAccountRequest)
+
+	// parse body payload
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(Responses{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	msgResponse := "accounts successfully fetched"
+	req.Status = strings.ToLower(req.Status)
+
+	validStatus := map[string]interface{}{"all": 0, "active": 1, "unregistered": 2}
+	if req.Status != "" {
+		if _, ok := validStatus[req.Status]; !ok {
+			return c.Status(400).JSON(Responses{
+				Success: false,
+				Message: "invalid status value. its only accept all, active or unregistered",
+				Data:    nil,
+			})
+		}
+		msgResponse = fmt.Sprintf("%s account successfully fetched", req.Status)
+	}
+
+	// set default value
+	if req.Page == 0 {
+		req.Page = 1
+	}
+
+	if req.Size == 0 {
+		req.Size = 10
+	}
+
+	code, accounts, total, pages, err := repository.AccountRepository.FindAllPaginated(req)
+	if err != nil {
+		return c.Status(code).JSON(ResponsePayloadPaginated{
+			Success: false,
+			Message: err.Error(),
+			Data:    ResponsePayloadDataPaginated{},
+		})
+	}
+
+	return c.Status(code).JSON(Responses{
+		Success: true,
+		Message: msgResponse,
+		Data: ResponsePayloadDataPaginated{
+			Result:      accounts,
+			Total:       total,
+			PerPage:     req.Size,
+			CurrentPage: req.Page,
+			LastPage:    pages,
+		},
 	})
 }
 
@@ -204,6 +267,7 @@ func GetRegisteredAccount(c *fiber.Ctx) error {
 
 }
 
+// GetRegisteredAccountByUID is used to find registered account based on uniqueId
 func GetRegisteredAccountByUID(c *fiber.Ctx) error {
 	code, account, err := repository.AccountRepository.FindByActiveStatus(c.Params("uid"), true)
 

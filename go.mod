@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/Shopify/sarama v1.38.1
 	github.com/gofiber/fiber/v2 v2.46.0
+	github.com/google/uuid v1.3.0
 	github.com/spf13/viper v1.16.0
 	github.com/xdg-go/scram v1.1.2
 	go.mongodb.org/mongo-driver v1.11.7
@@ -18,7 +19,6 @@ require (
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
