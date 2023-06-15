@@ -16,14 +16,22 @@ func initAccountRoutes(router fiber.Router) {
 		return handlers.Unregister(c)
 	})
 
+	// ---------------------------------------------------------------------------------------------------------------
 	// it can use query params to filter their active status
 	// example:
-	//
-	//	api/v1/account?active=true 	--> to fetch only active account
-	//	api/v1/account?active=false --> to fetch only unregistered account
-	//	api/v1/account 				--> to fetch all registered account whether its active or unregistered
+	// api/v1/account?active=true 	--> to fetch only active account
+	// api/v1/account?active=false --> to fetch only unregistered account
+	// api/v1/account 				--> to fetch all registered account whether its active or unregistered
+	// ---------------------------------------------------------------------------------------------------------------
+	// -- DEPRECATED --
+	// ---------------------------------------------------------------------------------------------------------------
 	r.Get("", func(c *fiber.Ctx) error {
-		return handlers.GetAllRegisteredAccount(c)
+		//return handlers.GetAllRegisteredAccount(c)
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"success": false,
+			"message": "-- deprecated --",
+			"data":    nil,
+		})
 	})
 
 	r.Post("/all", func(c *fiber.Ctx) error {
