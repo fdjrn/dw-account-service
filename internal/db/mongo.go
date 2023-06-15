@@ -3,11 +3,11 @@ package db
 import (
 	"context"
 	"github.com/dw-account-service/configs"
+	"github.com/dw-account-service/pkg/xlogger"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"log"
 	"time"
 )
 
@@ -63,8 +63,7 @@ func (i *MongoInstance) Connect() error {
 		},
 	}
 
-	log.Println("[INIT] database >> connected")
-
+	xlogger.Log.Println("| database >> connected")
 	return nil
 }
 
@@ -75,7 +74,7 @@ func (i *MongoInstance) Disconnect() error {
 
 	err := Mongo.Client.Disconnect(context.TODO())
 	if err != nil {
-		log.Println("error on closing mongodb connection: ", err.Error())
+		xlogger.Log.Println("error on closing mongodb connection: ", err.Error())
 		return err
 	}
 	return nil

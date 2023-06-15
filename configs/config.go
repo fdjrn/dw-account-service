@@ -1,6 +1,7 @@
 package configs
 
 import (
+	"github.com/dw-account-service/pkg/xlogger"
 	"github.com/spf13/viper"
 	"log"
 )
@@ -46,10 +47,15 @@ type KafkaConfig struct {
 }
 
 type AppConfig struct {
-	AppName   string       `mapstructure:"appName"`
-	APIServer ServerConfig `mapstructure:"server"`
-	Database  DBConfig     `mapstructure:"database"`
-	Kafka     KafkaConfig  `mapstructure:"kafka"`
+	AppName   string `mapstructure:"appName"`
+	DebugMode bool   `mapstructure:"debugMode"`
+	// os | file
+	LogOutput          string       `mapstructure:"logOutput"`
+	LogPath            string       `mapstructure:"logPath"`
+	VerboseAPIResponse bool         `mapstructure:"verboseApiResponse"`
+	APIServer          ServerConfig `mapstructure:"server"`
+	Database           DBConfig     `mapstructure:"database"`
+	Kafka              KafkaConfig  `mapstructure:"kafka"`
 }
 
 var MainConfig AppConfig
@@ -69,6 +75,18 @@ func Initialize() error {
 		return err
 	}
 
-	log.Println("[INIT] configuration >> loaded")
+	err = (&xlogger.AppLogger{
+		LogPath:     MainConfig.LogPath,
+		CompressLog: true,
+		DailyRotate: true,
+	}).SetAppLogger()
+
+	if err != nil {
+		log.Fatalln("Logger error: ", err.Error())
+		return err
+	}
+
+	xlogger.Log.SetPrefix("[INIT-APP] ")
+	xlogger.Log.Println("| configuration >> loaded")
 	return nil
 }

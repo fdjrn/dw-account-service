@@ -1,32 +1,34 @@
-
 {
-  "appName": "",
+  "appName": "AccountService",
+  "debugMode": true,
+  "logOutput": "file",
+  "logPath": "./logs/accountService.log",
+  "verboseApiResponse": true,
   "server" : {
-    "port" : ""
+    "port" : "8000"
   },
   "database" : {
     "mongodb": {
-      "uri" : "",
-      "dbName": ""
+      "uri" : "mongodb+srv://poc:uJdZxAWbjcoqGNK2@cluster0.koc84.mongodb.net/?retryWrites=true&w=majority",
+      "dbName": "mdw-account-balance"
     }
   },
   "kafka": {
-    "mode": "",
-    "brokers": "",
+    "mode": "producer",
+    "brokers": "close-dolphin-10345-us1-kafka.upstash.io:9092",
     "sasl" : {
-      "enable": true/false,
-      "algorithm" : "sha256/sha512",
-      "user" : "",
-      "password": ""
+      "enable": true,
+      "algorithm" : "sha256",
+      "user" : "Y2xvc2UtZG9scGhpbi0xMDM0NSTGwj0a1x0jSkxaJwILdPaLikTcqR6EpYnTAjg",
+      "password": "6ceb8642b35045e19df8c40d97745e24"
     },
     "tls" : {
-      "enable": true/false,
-      "insecureSkipVerify": true/false
+      "enable": true,
+      "insecureSkipVerify": true
     },
     "producer" : {
       "idempotent" : true,
       "retryMax" : 1
     }
-
   }
 }

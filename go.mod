@@ -9,6 +9,7 @@ require (
 	github.com/spf13/viper v1.16.0
 	github.com/xdg-go/scram v1.1.2
 	go.mongodb.org/mongo-driver v1.11.7
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
 require (

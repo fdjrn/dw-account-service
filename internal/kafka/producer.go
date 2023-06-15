@@ -6,8 +6,7 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/dw-account-service/configs"
 	"github.com/dw-account-service/pkg/tools"
-	"log"
-	"os"
+	"github.com/dw-account-service/pkg/xlogger"
 	"strings"
 )
 
@@ -17,8 +16,8 @@ var (
 )
 
 var (
-	Producer     sarama.SyncProducer
-	SaramaLogger = log.New(os.Stdout, "[PRODUCER] ", log.LstdFlags)
+	Producer sarama.SyncProducer
+	//SaramaLogger = log.New(os.Stdout, "[PRODUCER] ", log.LstdFlags)
 )
 
 func initProducer() error {
@@ -33,11 +32,11 @@ func initProducer() error {
 
 	syncProducer, err := sarama.NewSyncProducer(splitBrokers, conf)
 	if err != nil {
-		return errors.New(fmt.Sprintf("failed to create producer: %s", err.Error()))
+		return errors.New(fmt.Sprintf("| failed to create producer: %s", err.Error()))
 	}
 
 	Producer = syncProducer
-	log.Println("[INIT] kafka producer >> created")
+	xlogger.Log.Println("| kafka client (producer) >> created")
 
 	return nil
 }
@@ -56,17 +55,17 @@ func Initialize() error {
 }
 
 func ProduceMsg(topic string, payload []byte) error {
-
+	xlogger.Log.SetPrefix("[PRODUCER] ")
 	partition, offset, err := Producer.SendMessage(&sarama.ProducerMessage{
 		Topic: topic,
 		Key:   sarama.StringEncoder(tools.GetUnixTime()),
 		Value: sarama.StringEncoder(payload),
 	})
 	if err != nil {
-		SaramaLogger.Println("failed to send message to ", topic, err)
+		xlogger.Log.Println("| failed to send message to ", topic, err)
 		return err
 	}
 
-	SaramaLogger.Printf("wrote message at partition: %d, offset: %d", partition, offset)
+	xlogger.Log.Printf("| message successfully wrote at partition: %d, offset: %d\n", partition, offset)
 	return nil
 }
