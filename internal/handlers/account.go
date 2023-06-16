@@ -45,12 +45,13 @@ func isUnregistered(uniqueId string) bool {
 
 // Register is a function that used to insert new document into collection and set active status to true.
 func Register(c *fiber.Ctx) error {
+	var err error
 
 	// new account struct
 	a := new(entity.AccountBalance)
 
 	// parse body payload
-	if err := c.BodyParser(a); err != nil {
+	if err = c.BodyParser(a); err != nil {
 		return c.Status(400).JSON(Responses{
 			Success: false,
 			Message: err.Error(),
@@ -66,6 +67,18 @@ func Register(c *fiber.Ctx) error {
 		})
 	}
 
+	// validate request
+	m, err := tools.ValidateRequest(a)
+	if err != nil {
+		return c.Status(400).JSON(Responses{
+			Success: false,
+			Message: err.Error(),
+			Data: map[string]interface{}{
+				"errors": m,
+			},
+		})
+	}
+
 	// set default value for accountBalance document
 	key, _ := tools.GenerateSecretKey()
 	encryptedBalance, _ := tools.Encrypt([]byte(key), fmt.Sprintf("%016s", "0"))
@@ -74,7 +87,8 @@ func Register(c *fiber.Ctx) error {
 	a.SecretKey = key
 	a.Active = true
 	a.LastBalance = encryptedBalance
-	a.MainAccountID = "-"
+
+	//a.MainAccountID = "-"
 	a.CreatedAt = time.Now().UnixMilli()
 	a.UpdatedAt = a.CreatedAt
 

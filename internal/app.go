@@ -26,12 +26,12 @@ func ExitGracefully() {
 
 // SetupCloseHandler :
 func SetupCloseHandler() {
-	xlogger.Log.SetPrefix("[EXIT-APP] ")
+
 	c := make(chan os.Signal, 2)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
-
+		xlogger.Log.SetPrefix("[EXIT-APP] ")
 		xlogger.Log.Println("| Ctrl+C pressed in Terminal,... Good Bye...")
 		ExitGracefully()
 		os.Exit(0)

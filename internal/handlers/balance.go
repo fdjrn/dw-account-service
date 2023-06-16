@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"go.mongodb.org/mongo-driver/mongo"
 
-	"errors"
 	"fmt"
 	"github.com/dw-account-service/internal/db/entity"
 	"github.com/dw-account-service/internal/db/repository"
@@ -15,69 +14,6 @@ import (
 	"strconv"
 	"time"
 )
-
-func validateRequest(payload interface{}) (interface{}, error) {
-	var msg []string
-
-	switch req := payload.(type) {
-	case *entity.BalanceTopUp:
-		if req.UniqueID == "" {
-			msg = append(msg, "uniqueId cannot be empty.")
-		}
-
-		if req.Amount == 0 {
-			msg = append(msg, "topup amount must be greater than 0.")
-		}
-
-		if req.InRefNumber == "" {
-			msg = append(msg, "inRefNumber cannot be empty.")
-		}
-
-		if req.ExRefNumber == "" {
-			msg = append(msg, "exRefNumber cannot be empty.")
-		}
-
-		if req.TransDate == 0 {
-			msg = append(msg, "exRefNumber must be greater than 0.")
-		}
-
-		if len(msg) > 0 {
-			return msg, errors.New("request validation status failed")
-		}
-
-		return msg, nil
-
-	case *entity.BalanceDeduction:
-		if req.UniqueID == "" {
-			msg = append(msg, "uniqueId cannot be empty.")
-		}
-
-		if req.Amount == 0 {
-			msg = append(msg, "topup amount must be greater than 0.")
-		}
-
-		if req.TransType == 0 {
-			msg = append(msg, "transType cannot be empty.")
-		}
-
-		if req.Description == "" {
-			msg = append(msg, "transaction description cannot be empty.")
-		}
-
-		if req.InvoiceNumber == "" {
-			msg = append(msg, "invoiceNumber cannot be empty.")
-		}
-
-		if len(msg) > 0 {
-			return msg, errors.New("request validation status failed")
-		}
-
-		return msg, nil
-	default:
-		return msg, nil
-	}
-
-}
 
 func InquiryBalance(c *fiber.Ctx) error {
 
@@ -128,7 +64,7 @@ func TopupBalance(c *fiber.Ctx) error {
 	}
 
 	// validate request
-	m, err := validateRequest(t)
+	m, err := tools.ValidateRequest(t)
 	if err != nil {
 		return c.Status(400).JSON(Responses{
 			Success: false,
@@ -218,7 +154,7 @@ func DeductBalance(c *fiber.Ctx) error {
 	}
 
 	// validate request
-	m, err := validateRequest(d)
+	m, err := tools.ValidateRequest(d)
 	if err != nil {
 		return c.Status(400).JSON(Responses{
 			Success: false,
@@ -246,6 +182,10 @@ func DeductBalance(c *fiber.Ctx) error {
 			Data:    nil,
 		})
 	}
+
+	// TODO simpan current last balance, digunakan untuk proses rollback transaction
+	// jika terjadi kegagalan produce message
+
 	// 2. Jika saldo cukup, maka lanjutkan proses pengurangan saldo (pembayaran)
 	if b.CurrentBalance < int64(d.Amount) {
 		return c.Status(500).JSON(Responses{
