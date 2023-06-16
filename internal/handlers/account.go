@@ -154,8 +154,11 @@ func Unregister(c *fiber.Ctx) error {
 	})
 }
 
-// GetAllRegisteredAccount is used to find all registered account and can be filtered with their active status
-func GetAllRegisteredAccount(c *fiber.Ctx) error {
+// GetAllRegisteredAccount
+// is used to find all registered account and can be filtered with their active status
+// [DEPRECATED]
+// ------------------------------------------------------------------------------------------------------
+/*func GetAllRegisteredAccount(c *fiber.Ctx) error {
 	accountStatus := ""
 	queryParams := c.Query("active")
 	if queryParams != "" {
@@ -195,7 +198,7 @@ func GetAllRegisteredAccount(c *fiber.Ctx) error {
 			Result: accounts,
 		},
 	})
-}
+}*/
 
 func GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
 
