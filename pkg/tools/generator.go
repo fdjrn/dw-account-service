@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	rand2 "math/rand"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +15,8 @@ const (
 	TransTopUp   = "Top-Up"
 	TransPayment = "Payment"
 )
+
+var charset = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
 func GenerateSecretKey() (string, error) {
 	key := make([]byte, 16)
@@ -84,10 +87,19 @@ func GenerateReceiptNumber(transType string, id string) string {
 
 	switch transType {
 	case TransTopUp:
-		r = "1000" + tUnix + id
+		r = fmt.Sprintf("1000%s%s", tUnix, id)
 	case TransPayment:
-		r = "2000" + tUnix + id
+		r = fmt.Sprintf("2000%s%s", tUnix, id)
 	}
 
 	return r
+}
+
+func GenerateTransNumber() string {
+	rand2.Seed(time.Now().UnixNano())
+	b := make([]byte, 8)
+	for i := range b {
+		b[i] = charset[rand2.Intn(len(charset))]
+	}
+	return fmt.Sprintf("%s%s", time.Now().Format("20060102"), string(b))
 }

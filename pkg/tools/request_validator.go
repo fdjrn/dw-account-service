@@ -30,21 +30,25 @@ func ValidateRequest(payload interface{}) (interface{}, error) {
 			msg = append(msg, "exRefNumber must be greater than 0.")
 		}
 
-	case *entity.MerchantBalanceTopUp:
-		if p.UniqueID == "" {
-			msg = append(msg, "uniqueId cannot be empty.")
+	case *entity.MerchantTopUpRequest:
+		if p.PartnerID == "" {
+			msg = append(msg, "partnerId cannot be empty.")
+		}
+
+		if p.MerchantID == "" {
+			msg = append(msg, "merchantId cannot be empty.")
 		}
 
 		if p.Amount == 0 {
-			msg = append(msg, "topup amount must be greater than 0.")
-		}
-
-		if p.PartnerTransDate == "" {
-			msg = append(msg, "partnerTransDate cannot be empty.")
+			msg = append(msg, "topupAmount must be greater than 0.")
 		}
 
 		if p.PartnerRefNumber == "" {
 			msg = append(msg, "partnerRefNumber cannot be empty.")
+		}
+
+		if p.PartnerTransDate == "" {
+			msg = append(msg, "partnerTransDate cannot be empty.")
 		}
 
 	case *entity.BalanceDeduction:

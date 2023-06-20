@@ -39,3 +39,21 @@ func (t *Topup) IsUsedExRefNumber(refNo string) bool {
 	return true
 
 }
+
+func (t *Topup) IsUsedPartnerRefNumber(refNo string) bool {
+
+	// filter condition
+	filter := bson.D{{"partnerRefNumber", refNo}}
+
+	topup := new(entity.BalanceTopUp)
+	err := db.Mongo.Collection.BalanceTopup.FindOne(context.TODO(), filter).Decode(&topup)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return false
+		}
+		return true
+	}
+
+	return true
+
+}

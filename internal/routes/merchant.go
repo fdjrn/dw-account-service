@@ -31,7 +31,11 @@ func initMerchantRoutes(router fiber.Router) {
 
 	// ------------ TRX ------------
 
-	r.Post("/topup-merchant", func(c *fiber.Ctx) error {
+	r.Post("/balance/topup", func(c *fiber.Ctx) error {
 		return h.BalanceTopup(c)
+	})
+
+	r.Post("/balance/inquiry", func(c *fiber.Ctx) error {
+		return h.BalanceInquiry(c)
 	})
 }

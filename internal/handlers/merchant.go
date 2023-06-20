@@ -9,6 +9,7 @@ import (
 	"github.com/dw-account-service/pkg/xlogger"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/mongo"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -297,7 +298,147 @@ func (m *MerchantHandler) GetMerchantByID(c *fiber.Ctx) error {
 
 func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
 	// TODO: merchant last balance topup
-	// partnerId, merchantId, amount, partnerTransDate, partnerRefNo
 
-	return nil
+	// new MerchantTopUpRequest struct
+	payload := new(entity.MerchantTopUpRequest)
+
+	// parse body payload
+	if err := c.BodyParser(&payload); err != nil {
+		return c.Status(400).JSON(Responses{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	// validate request
+	msg, err := tools.ValidateRequest(payload)
+	if err != nil {
+		return c.Status(400).JSON(Responses{
+			Success: false,
+			Message: err.Error(),
+			Data: map[string]interface{}{
+				"errors": msg,
+			},
+		})
+	}
+
+	// 1. check used partnerRefNumber
+	if repository.TopupRepository.IsUsedPartnerRefNumber(payload.PartnerRefNumber) {
+		return c.Status(400).JSON(Responses{
+			Success: false,
+			Message: "partnerRefNumber already used",
+			Data: fiber.Map{
+				"partnerRefNumber": payload.PartnerRefNumber,
+			},
+		})
+	}
+
+	// 2. inquiry balance
+	code, balance, err := repository.BalanceRepository.MerchantInquiry(entity.BalanceInquiry{
+		MerchantID: payload.MerchantID, PartnerID: payload.PartnerID,
+	})
+	if err != nil {
+		return c.Status(code).JSON(Responses{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	tBalance := new(entity.BalanceTopUp)
+
+	// 3. add last balance with amount of topup
+	//tBalance.UniqueID = "-"
+	tBalance.PartnerID = payload.PartnerID
+	tBalance.MerchantID = payload.MerchantID
+	//tBalance.TerminalID = "-"
+	//tBalance.VoucherCode = "-"
+	//tBalance.VoucherAmount = payload.Amount
+	tBalance.Amount = payload.Amount
+	tBalance.PartnerRefNumber = payload.PartnerRefNumber
+	tBalance.PartnerTransDate = payload.PartnerTransDate
+	tBalance.TransDate = time.Now().UnixMilli()
+	tBalance.TransNumber = tools.GenerateTransNumber()
+	tBalance.ReceiptNumber = tools.GenerateReceiptNumber(tools.TransTopUp, "")
+
+	// 4. encrypt result addition
+	tBalance.LastBalance = balance.CurrentBalance + int64(payload.Amount)
+	strLastBalance := strconv.FormatInt(tBalance.LastBalance, 10)
+	tBalance.LastBalanceEncrypted, _ = tools.Encrypt([]byte(balance.SecretKey), fmt.Sprintf("%016s", strLastBalance))
+
+	tBalance.Status = repository.TransSuccessStatus
+	tBalance.CreatedAt = tBalance.TransDate
+	tBalance.UpdatedAt = tBalance.TransDate
+
+	// 5. insert topup document
+	code, err = repository.TopupRepository.CreateTopupDocument(tBalance)
+	if err != nil {
+		return c.Status(code).JSON(Responses{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	// 6. do update document on Account Collection
+	code, err = repository.BalanceRepository.UpdateMerchantBalance(tBalance)
+	if err != nil {
+		return c.Status(code).JSON(Responses{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	// 7. publish transaction to broker
+	//payload, err := json.Marshal(t)
+	//if err != nil {
+	//	log.Println("cannot marshal payload: ", err.Error())
+	//}
+	//
+	//_ = kafka.ProduceMsg(kafka.TopUpTopic, payload)
+
+	return c.Status(code).JSON(Responses{
+		Success: true,
+		Message: "account balance has been top-up successfully",
+		Data:    tBalance,
+	})
+}
+
+func (m *MerchantHandler) BalanceInquiry(c *fiber.Ctx) error {
+
+	var payload entity.BalanceInquiry
+
+	// parse body payload
+	if err := c.BodyParser(&payload); err != nil {
+		return c.Status(400).JSON(Responses{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	code, account, err := repository.BalanceRepository.MerchantInquiry(payload)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return c.Status(code).JSON(Responses{
+				Success: false,
+				Message: "balance not found or it has been unregistered",
+				Data:    nil,
+			})
+		}
+
+		return c.Status(code).JSON(Responses{
+			Success: false,
+			Message: "failed to inquiry last balance on current merchant",
+			Data:    nil,
+		})
+	}
+
+	return c.Status(code).JSON(Responses{
+		Success: true,
+		Message: "balance successfully fetched",
+		Data:    account,
+	})
 }

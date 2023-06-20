@@ -8,6 +8,7 @@ import (
 	"github.com/dw-account-service/pkg/tools"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"time"
 )
 
@@ -38,6 +39,32 @@ func (b *Balance) Inquiry(uid string) (int, entity.BalanceInquiry, error) {
 	return fiber.StatusOK, balance, nil
 }
 
+func (b *Balance) MerchantInquiry(inquiry entity.BalanceInquiry) (int, entity.BalanceInquiry, error) {
+
+	// filter criteria
+	filter := bson.D{
+		{"partnerId", inquiry.PartnerID},
+		{"merchantId", inquiry.MerchantID},
+	}
+
+	var balance entity.BalanceInquiry
+	err := db.Mongo.Collection.Account.FindOne(
+		context.Background(),
+		filter,
+		options.FindOne().SetProjection(bson.D{{"_id", 0}}),
+	).Decode(&balance)
+
+	if err != nil {
+		return fiber.StatusInternalServerError, entity.BalanceInquiry{}, err
+	}
+
+	// convert lastBalance
+	//currentBalance, _ := tools.DecryptAndConvert([]byte(balance.SecretKey), balance.LastBalance)
+	//balance.CurrentBalance = int64(currentBalance)
+
+	return fiber.StatusOK, balance, nil
+}
+
 // UpdateBalance is a function that update lastBalance field based on supplied uniqueId
 func (b *Balance) UpdateBalance(uid string, lastBalance string) (int, error) {
 
@@ -46,6 +73,31 @@ func (b *Balance) UpdateBalance(uid string, lastBalance string) (int, error) {
 	update := bson.D{
 		{"$set", bson.D{
 			{"lastBalance", lastBalance},
+			{"updatedAt", time.Now().UnixMilli()},
+		}},
+	}
+
+	result, err := db.Mongo.Collection.Account.UpdateOne(context.TODO(), filter, update)
+	if err != nil {
+		return fiber.StatusInternalServerError, err
+	}
+
+	if result.ModifiedCount == 0 {
+		return fiber.StatusBadRequest,
+			errors.New("update balance failed, cannot find account with current id")
+	}
+
+	return fiber.StatusOK, nil
+}
+
+func (b *Balance) UpdateMerchantBalance(t *entity.BalanceTopUp) (int, error) {
+
+	// 1. update balance on current document
+	filter := bson.D{{"partnerId", t.PartnerID}, {"merchantId", t.MerchantID}}
+	update := bson.D{
+		{"$set", bson.D{
+			{"lastBalanceNumeric", t.LastBalance},
+			{"lastBalance", t.LastBalanceEncrypted},
 			{"updatedAt", time.Now().UnixMilli()},
 		}},
 	}
