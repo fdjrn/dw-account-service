@@ -56,6 +56,51 @@ type BalanceTopUp struct {
 	UpdatedAt int64 `json:"updatedAt,omitempty" bson:"updatedAt,omitempty"`
 }
 
+// MerchantBalanceTopUp
+// adalah struct yang digunakan untuk proses penambahan saldo merchant
+// dan merupakan message payload yang dikirimkan ke kafka
+type MerchantBalanceTopUp struct {
+	// MongoDB ObjectID
+	ID string `json:"accountId,omitempty" bson:"_id,omitempty"`
+
+	// Unique ID (user programs id, yang didapat dari MDL MyDigiLearn yang terdaftar)
+	UniqueID string `json:"uniqueId" bson:"uniqueId"`
+
+	// Amount of topup
+	Amount int `json:"topupAmount" bson:"topupAmount"`
+
+	// PartnerRefNumber adalah eksternal Ref Number yang didapat dari partner
+	PartnerRefNumber string `json:"partnerRefNumber" bson:"partnerRefNumber"`
+
+	// PartnerTransDate adalah tgl transaksi yang dikirim oleh client/partner
+	PartnerTransDate string `json:"partnerTransDate" bson:"partnerTransDate"`
+
+	// internal Transaction Date / Success processed Date Time,
+	// format: yyyymmddHHMMss
+	TransDate int `json:"transDate" bson:"transDate,omitempty"`
+
+	// TransNumber adalah nomor referensi transaksi yang di-generate system yang nantinya bisa dijadikan
+	// pengecekan status transaksi
+	TransNumber string `json:"transNumber,omitempty" bson:"transNumber,omitempty"`
+
+	// ReceiptNumber adalah no resi jika proses top up berhasil
+	ReceiptNumber string `json:"receiptNumber,omitempty" bson:"receiptNumber"`
+
+	// LastBalance adalah nilai (numeric) saldo akhir setelah proses penambahan saldo
+	LastBalance int64 `json:"currentBalance,omitempty" bson:"lastBalance,omitempty"`
+
+	// LastBalanceEncrypted -->> Encrypted last balance after addition
+	LastBalanceEncrypted string `json:"-" bson:"-"`
+
+	// Status transaksi
+	// 00-SUCCESS; 01-PENDING; 02-FAILED
+	Status string `json:"status,omitempty" bson:"status,omitempty"`
+
+	// audit trail timestamp dalam format UNIX timestamp
+	CreatedAt int64 `json:"createdAt,omitempty" bson:"createdAt,omitempty"`
+	UpdatedAt int64 `json:"updatedAt,omitempty" bson:"updatedAt,omitempty"`
+}
+
 // BalanceDeduction
 // adalah struct yang digunakan untuk proses pengurangan (deduction) saldo pengguna
 // dan merupakan message payload yang dikirimkan ke kafka

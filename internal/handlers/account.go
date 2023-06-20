@@ -13,8 +13,11 @@ import (
 	"time"
 )
 
-// isRegistered is a private function that check whether account id has been registered based on phoneNumber
-func isRegistered(uniqueId string) bool {
+type AccountHandler struct {
+}
+
+// isRegistered is a private function that check whether account id has been registered based on uniqueId
+func (a *AccountHandler) isRegistered(uniqueId string) bool {
 	_, _, err := repository.AccountRepository.FindByUniqueID(uniqueId, true)
 	if err != nil {
 		// no document found, its mean it can be registered
@@ -29,7 +32,7 @@ func isRegistered(uniqueId string) bool {
 }
 
 // isUnregistered is a private function that check whether account id has been unregistered or not
-func isUnregistered(uniqueId string) bool {
+func (a *AccountHandler) isUnregistered(uniqueId string) bool {
 	_, _, err := repository.AccountRepository.FindByActiveStatus(uniqueId, false)
 	if err != nil {
 		// no document found, its mean it can be unregistered
@@ -44,14 +47,14 @@ func isUnregistered(uniqueId string) bool {
 }
 
 // Register is a function that used to insert new document into collection and set active status to true.
-func Register(c *fiber.Ctx) error {
+func (a *AccountHandler) Register(c *fiber.Ctx) error {
 	var err error
 
 	// new account struct
-	a := new(entity.AccountBalance)
+	payload := new(entity.AccountBalance)
 
 	// parse body payload
-	if err = c.BodyParser(a); err != nil {
+	if err = c.BodyParser(&payload); err != nil {
 		return c.Status(400).JSON(Responses{
 			Success: false,
 			Message: err.Error(),
@@ -59,16 +62,16 @@ func Register(c *fiber.Ctx) error {
 		})
 	}
 
-	if isRegistered(a.UniqueID) {
+	if a.isRegistered(payload.UniqueID) {
 		return c.Status(400).JSON(Responses{
 			Success: false,
 			Message: "uniqueId has already been registered",
-			Data:    fiber.Map{"uniqueId": a.UniqueID},
+			Data:    fiber.Map{"uniqueId": payload.UniqueID},
 		})
 	}
 
 	// validate request
-	m, err := tools.ValidateRequest(a)
+	m, err := tools.ValidateRequest(payload)
 	if err != nil {
 		return c.Status(400).JSON(Responses{
 			Success: false,
@@ -83,23 +86,23 @@ func Register(c *fiber.Ctx) error {
 	key, _ := tools.GenerateSecretKey()
 	encryptedBalance, _ := tools.Encrypt([]byte(key), fmt.Sprintf("%016s", "0"))
 
-	a.ID = ""
-	a.SecretKey = key
-	a.Active = true
-	a.LastBalance = encryptedBalance
-	a.LastBalanceNumeric = 0
-	a.PartnerID = "MDL"
+	payload.ID = ""
+	payload.SecretKey = key
+	payload.Active = true
+	payload.LastBalance = encryptedBalance
+	payload.LastBalanceNumeric = 0
+	payload.PartnerID = "MDL"
 
-	arrUniqueCode := strings.Split(a.UniqueID, "_")
-	a.MerchantID = arrUniqueCode[1]
-	a.TerminalID = arrUniqueCode[0]
-	a.TerminalName = "user-name for terminalId: " + arrUniqueCode[0]
+	arrUniqueCode := strings.Split(payload.UniqueID, "_")
+	payload.MerchantID = arrUniqueCode[1]
+	payload.TerminalID = arrUniqueCode[0]
+	payload.TerminalName = "user-name for terminalId: " + arrUniqueCode[0]
 
 	//a.MainAccountID = "-"
-	a.CreatedAt = time.Now().UnixMilli()
-	a.UpdatedAt = a.CreatedAt
+	payload.CreatedAt = time.Now().UnixMilli()
+	payload.UpdatedAt = payload.CreatedAt
 
-	code, id, err := repository.AccountRepository.InsertDocument(a)
+	code, id, err := repository.AccountRepository.InsertDocument(payload)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
@@ -118,13 +121,13 @@ func Register(c *fiber.Ctx) error {
 }
 
 // Unregister is a function that used to change active status to false (unregistered)
-func Unregister(c *fiber.Ctx) error {
+func (a *AccountHandler) Unregister(c *fiber.Ctx) error {
 
-	// new u struct
-	u := new(entity.UnregisterAccount)
+	// new UnregisterAccount struct
+	uac := new(entity.UnregisterAccount)
 
 	// parse body payload
-	if err := c.BodyParser(u); err != nil {
+	if err := c.BodyParser(uac); err != nil {
 		return c.Status(400).JSON(Responses{
 			Success: false,
 			Message: err.Error(),
@@ -133,14 +136,14 @@ func Unregister(c *fiber.Ctx) error {
 	}
 
 	// check if already been unregistered
-	if isUnregistered(u.UniqueID) {
+	if a.isUnregistered(uac.UniqueID) {
 		return c.Status(400).JSON(Responses{
 			Success: false,
 			Message: "account has already been unregistered",
-			Data:    u,
+			Data:    uac,
 		})
 	}
-	code, err := repository.AccountRepository.DeactivateAccount(u)
+	code, err := repository.AccountRepository.DeactivateAccount(uac)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
@@ -150,9 +153,9 @@ func Unregister(c *fiber.Ctx) error {
 	}
 
 	// insert into accountDeactivated collection
-	code, _, err = repository.AccountRepository.InsertDeactivatedAccount(u)
+	code, _, err = repository.AccountRepository.InsertDeactivatedAccount(uac)
 
-	_, updatedAccount, _ := repository.AccountRepository.FindByUniqueID(u.UniqueID, false)
+	_, updatedAccount, _ := repository.AccountRepository.FindByUniqueID(uac.UniqueID, false)
 
 	return c.Status(code).JSON(Responses{
 		Success: true,
@@ -207,7 +210,7 @@ func Unregister(c *fiber.Ctx) error {
 	})
 }*/
 
-func GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
+func (a *AccountHandler) GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
 
 	var req = new(request.PaginatedAccountRequest)
 
@@ -267,7 +270,7 @@ func GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
 }
 
 // GetRegisteredAccount is used to find registered account with active status = true
-func GetRegisteredAccount(c *fiber.Ctx) error {
+func (a *AccountHandler) GetRegisteredAccount(c *fiber.Ctx) error {
 	id, _ := primitive.ObjectIDFromHex(c.Params("id"))
 	code, account, err := repository.AccountRepository.FindByID(id, true)
 
@@ -292,7 +295,7 @@ func GetRegisteredAccount(c *fiber.Ctx) error {
 }
 
 // GetRegisteredAccountByUID is used to find registered account based on uniqueId
-func GetRegisteredAccountByUID(c *fiber.Ctx) error {
+func (a *AccountHandler) GetRegisteredAccountByUID(c *fiber.Ctx) error {
 	code, account, err := repository.AccountRepository.FindByActiveStatus(c.Params("uid"), true)
 
 	if err != nil {

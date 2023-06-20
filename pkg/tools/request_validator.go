@@ -30,11 +30,22 @@ func ValidateRequest(payload interface{}) (interface{}, error) {
 			msg = append(msg, "exRefNumber must be greater than 0.")
 		}
 
-		if len(msg) > 0 {
-			return msg, errors.New("request validation status failed")
+	case *entity.MerchantBalanceTopUp:
+		if p.UniqueID == "" {
+			msg = append(msg, "uniqueId cannot be empty.")
 		}
 
-		return msg, nil
+		if p.Amount == 0 {
+			msg = append(msg, "topup amount must be greater than 0.")
+		}
+
+		if p.PartnerTransDate == "" {
+			msg = append(msg, "partnerTransDate cannot be empty.")
+		}
+
+		if p.PartnerRefNumber == "" {
+			msg = append(msg, "partnerRefNumber cannot be empty.")
+		}
 
 	case *entity.BalanceDeduction:
 		if p.UniqueID == "" {
@@ -57,14 +68,8 @@ func ValidateRequest(payload interface{}) (interface{}, error) {
 			msg = append(msg, "invoiceNumber cannot be empty.")
 		}
 
-		if len(msg) > 0 {
-			return msg, errors.New("request validation status failed")
-		}
-
-		return msg, nil
-
 	case *entity.AccountBalance:
-		if p.UniqueID == "" {
+		if p.UniqueID == "" && p.Type == 1 {
 			msg = append(msg, "uniqueId cannot be empty.")
 		}
 
@@ -73,28 +78,29 @@ func ValidateRequest(payload interface{}) (interface{}, error) {
 		}
 
 		if p.Type > 2 {
-			msg = append(msg, "unsupported account type. only: 1 (regular) or 2 (admin)")
+			msg = append(msg, "unsupported account type. only: 1 (regular) or 2 (merchant)")
 		}
 
-		//if p.PartnerID == "" {
-		//	msg = append(msg, "partnerId cannot be empty.")
-		//}
+		if p.Type == 2 {
+			if p.PartnerID == "" {
+				msg = append(msg, "partnerId cannot be empty.")
+			}
 
-		//if p.MerchantID == "" {
-		//	msg = append(msg, "merchantId cannot be empty.")
-		//}
+			if p.MerchantID == "" {
+				msg = append(msg, "merchantId cannot be empty.")
+			}
+		}
 
 		//if p.Type == 2 && p.MainAccountID == "" {
 		//	msg = append(msg, "mainAccountId cannot be empty.")
 		//}
 
-		if len(msg) > 0 {
-			return msg, errors.New("request validation status failed")
-		}
-
-		return msg, nil
 	default:
-		return msg, nil
 	}
+
+	if len(msg) > 0 {
+		return msg, errors.New("request validation status failed")
+	}
+	return msg, nil
 
 }

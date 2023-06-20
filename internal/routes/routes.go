@@ -16,6 +16,7 @@ func setupRoutes(app *fiber.App) {
 	api := app.Group("/api/v1")
 	initAccountRoutes(api)
 	initBalanceRoutes(api)
+	initMerchantRoutes(api)
 
 	xlogger.Log.Println("| routes >> initialized")
 }

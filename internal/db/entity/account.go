@@ -6,7 +6,7 @@ type AccountBalance struct {
 	ID string `json:"accountId,omitempty" bson:"_id,omitempty"`
 
 	// Unique ID yang didapat dari MDL MyDigiLearn yang terdaftar
-	UniqueID string `json:"uniqueId" bson:"uniqueId"`
+	UniqueID string `json:"uniqueId,omitempty" bson:"uniqueId"`
 
 	// Key untuk melakukan proses encrypt dan decrypt lastBalance, yang di-generate ketika registrasi
 	SecretKey string `json:"-" bson:"secretKey"`
@@ -25,7 +25,7 @@ type AccountBalance struct {
 
 	// Akun utama jika kedepannya setiap akun bisa memiliki akun turunan
 	// value dari field ini adalah UniqueID yang menjadi
-	MainAccountID string `json:"mainAccountID,omitempty" bson:"mainAccountID,omitempty"`
+	//MainAccountID string `json:"mainAccountID,omitempty" bson:"mainAccountID,omitempty"`
 
 	// Id platform yang bekerjasama dengan wallet system (dalam hal ini MDL)
 	PartnerID string `json:"partnerId,omitempty" bson:"partnerId"`
@@ -41,16 +41,19 @@ type AccountBalance struct {
 
 	// TerminalName adalah deskripsi dari terminal id yang di kirim,
 	// field ini bersifat optional
-	TerminalName string `json:"terminalName,omitempty" bson:"terminalName,omitempty"`
+	TerminalName string `json:"terminalName,omitempty" bson:"terminalName"`
 
 	// audit trail dalam format UNIX timestamp
-	CreatedAt int64 `json:"createdAt,omitempty" bson:"createdAt,omitempty"`
-	UpdatedAt int64 `json:"updatedAt,omitempty" bson:"updatedAt,omitempty"`
+	CreatedAt int64 `json:"createdAt,omitempty" bson:"createdAt"`
+	UpdatedAt int64 `json:"updatedAt,omitempty" bson:"updatedAt"`
 }
 
 type UnregisterAccount struct {
-	//ID                string `json:"accountId,omitempty" bson:"_id,omitempty"`
-	UniqueID          string `json:"uniqueId" bson:"uniqueId"`
+	UniqueID          string `json:"uniqueId,omitempty" bson:"uniqueId"`
+	PartnerID         string `json:"partnerId,omitempty" bson:"partnerId"`
+	MerchantID        string `json:"merchantId,omitempty" bson:"merchantId"`
 	ReasonCode        int    `json:"reasonCode" bson:"reasonCode"`
 	ReasonDescription string `json:"reasonDescription" bson:"reasonDescription"`
+	CreatedAt         string `json:"createdAt,omitempty" bson:"createdAt,omitempty"`
+	UpdatedAt         string `json:"updatedAt,omitempty" bson:"updatedAt,omitempty"`
 }

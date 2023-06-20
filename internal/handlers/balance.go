@@ -15,7 +15,10 @@ import (
 	"time"
 )
 
-func InquiryBalance(c *fiber.Ctx) error {
+type BalanceHandler struct {
+}
+
+func (b *BalanceHandler) InquiryBalance(c *fiber.Ctx) error {
 
 	uid := c.Params("uid")
 	if uid == "" {
@@ -50,7 +53,7 @@ func InquiryBalance(c *fiber.Ctx) error {
 	})
 }
 
-func TopupBalance(c *fiber.Ctx) error {
+func (b *BalanceHandler) TopupBalance(c *fiber.Ctx) error {
 	// new BalanceTopup struct
 	t := new(entity.BalanceTopUp)
 
@@ -85,7 +88,7 @@ func TopupBalance(c *fiber.Ctx) error {
 	}
 
 	// 2. inquiry balance
-	code, b, err := repository.BalanceRepository.Inquiry(t.UniqueID)
+	code, balance, err := repository.BalanceRepository.Inquiry(t.UniqueID)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
@@ -95,11 +98,11 @@ func TopupBalance(c *fiber.Ctx) error {
 	}
 
 	// 3. add last balance with amount of topup
-	t.LastBalance = b.CurrentBalance + int64(t.Amount)
+	t.LastBalance = balance.CurrentBalance + int64(t.Amount)
 
 	// 4. encrypt result addition
 	strLastBalance := strconv.FormatInt(t.LastBalance, 10)
-	t.LastBalanceEncrypted, _ = tools.Encrypt([]byte(b.SecretKey), fmt.Sprintf("%016s", strLastBalance))
+	t.LastBalanceEncrypted, _ = tools.Encrypt([]byte(balance.SecretKey), fmt.Sprintf("%016s", strLastBalance))
 
 	t.ReceiptNumber = tools.GenerateReceiptNumber(tools.TransTopUp, "")
 	t.CreatedAt = time.Now().UnixMilli()
@@ -140,7 +143,7 @@ func TopupBalance(c *fiber.Ctx) error {
 	})
 }
 
-func DeductBalance(c *fiber.Ctx) error {
+func (b *BalanceHandler) DeductBalance(c *fiber.Ctx) error {
 	// new BalanceDeduction struct
 	d := new(entity.BalanceDeduction)
 
@@ -166,7 +169,7 @@ func DeductBalance(c *fiber.Ctx) error {
 	}
 
 	// 1. Inquiry Balance
-	code, b, err := repository.BalanceRepository.Inquiry(d.UniqueID)
+	code, balance, err := repository.BalanceRepository.Inquiry(d.UniqueID)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return c.Status(code).JSON(Responses{
@@ -187,7 +190,7 @@ func DeductBalance(c *fiber.Ctx) error {
 	// jika terjadi kegagalan produce message
 
 	// 2. Jika saldo cukup, maka lanjutkan proses pengurangan saldo (pembayaran)
-	if b.CurrentBalance < int64(d.Amount) {
+	if balance.CurrentBalance < int64(d.Amount) {
 		return c.Status(500).JSON(Responses{
 			Success: false,
 			Message: "current balance is less than current transaction amount",
@@ -195,11 +198,11 @@ func DeductBalance(c *fiber.Ctx) error {
 		})
 	}
 
-	d.LastBalance = b.CurrentBalance - int64(d.Amount)
+	d.LastBalance = balance.CurrentBalance - int64(d.Amount)
 
 	// 3. Encrypt hasil pengurangan
 	strLastBalance := strconv.FormatInt(d.LastBalance, 10)
-	d.LastBalanceEncrypted, _ = tools.Encrypt([]byte(b.SecretKey), fmt.Sprintf("%016s", strLastBalance))
+	d.LastBalanceEncrypted, _ = tools.Encrypt([]byte(balance.SecretKey), fmt.Sprintf("%016s", strLastBalance))
 
 	// 4. Update document
 	code, err = repository.BalanceRepository.UpdateBalance(d.UniqueID, d.LastBalanceEncrypted)
@@ -210,14 +213,15 @@ func DeductBalance(c *fiber.Ctx) error {
 			Data:    nil,
 		})
 	}
+
 	// 5. Fetch updated document
-	_, b, _ = repository.BalanceRepository.Inquiry(d.UniqueID)
+	_, balance, _ = repository.BalanceRepository.Inquiry(d.UniqueID)
 
 	// 6. set default value
 	// untuk PoC masih Hardcoded dulu...
 	// TransType --> 1: Pembelian Konten E-Course | 2: TBD
 	d.ReceiptNumber = tools.GenerateReceiptNumber(tools.TransPayment, "")
-	d.LastBalance = b.CurrentBalance
+	d.LastBalance = balance.CurrentBalance
 
 	// 7. Publish payment/deduction message to broker
 	payload, err := json.Marshal(d)

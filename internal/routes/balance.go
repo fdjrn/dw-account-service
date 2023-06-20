@@ -7,19 +7,24 @@ import (
 
 func initBalanceRoutes(router fiber.Router) {
 	r := router.Group("/account/balance")
+	h := handlers.BalanceHandler{}
 
 	r.Get("/inquiry/:uid", func(c *fiber.Ctx) error {
-		return handlers.InquiryBalance(c)
+		return h.InquiryBalance(c)
 	})
 
 	// balance transaction
 	// ---------------------------------------------------------------
 	r.Post("/topup", func(c *fiber.Ctx) error {
-		return handlers.TopupBalance(c)
+		return h.TopupBalance(c)
 	})
 
+	//r.Post("/topup-merchant", func(c *fiber.Ctx) error {
+	//	return h.TopupMerchantBalance(c)
+	//})
+
 	r.Post("/deduct", func(c *fiber.Ctx) error {
-		return handlers.DeductBalance(c)
+		return h.DeductBalance(c)
 	})
 
 	// temporary commented out

@@ -7,13 +7,14 @@ import (
 
 func initAccountRoutes(router fiber.Router) {
 	r := router.Group("/account")
+	h := handlers.AccountHandler{}
 
 	r.Post("/register", func(c *fiber.Ctx) error {
-		return handlers.Register(c)
+		return h.Register(c)
 	})
 
 	r.Post("/unregister", func(c *fiber.Ctx) error {
-		return handlers.Unregister(c)
+		return h.Unregister(c)
 	})
 
 	// ---------------------------------------------------------------------------------------------------------------
@@ -35,15 +36,15 @@ func initAccountRoutes(router fiber.Router) {
 	})
 
 	r.Post("/all", func(c *fiber.Ctx) error {
-		return handlers.GetAllRegisteredAccountPaginated(c)
+		return h.GetAllRegisteredAccountPaginated(c)
 	})
 
 	r.Get("/:id", func(c *fiber.Ctx) error {
-		return handlers.GetRegisteredAccount(c)
+		return h.GetRegisteredAccount(c)
 	})
 
 	r.Get("/uid/:uid", func(c *fiber.Ctx) error {
-		return handlers.GetRegisteredAccountByUID(c)
+		return h.GetRegisteredAccountByUID(c)
 	})
 
 }
