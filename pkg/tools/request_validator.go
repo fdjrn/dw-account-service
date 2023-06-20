@@ -68,21 +68,25 @@ func ValidateRequest(payload interface{}) (interface{}, error) {
 			msg = append(msg, "uniqueId cannot be empty.")
 		}
 
-		if p.PartnerID == "" {
-			msg = append(msg, "partnerId cannot be empty.")
-		}
-
-		if p.MerchantID == "" {
-			msg = append(msg, "merchantId cannot be empty.")
-		}
-
 		if p.Type == 0 {
-			msg = append(msg, "type cannot be empty. eg: 1 >> regular account | 2 >> sub-account")
+			msg = append(msg, "type cannot be empty. eg: 1 (regular) or 2 (admin)")
 		}
 
-		if p.Type == 2 && p.MainAccountID == "" {
-			msg = append(msg, "mainAccountId cannot be empty.")
+		if p.Type > 2 {
+			msg = append(msg, "unsupported account type. only: 1 (regular) or 2 (admin)")
 		}
+
+		//if p.PartnerID == "" {
+		//	msg = append(msg, "partnerId cannot be empty.")
+		//}
+
+		//if p.MerchantID == "" {
+		//	msg = append(msg, "merchantId cannot be empty.")
+		//}
+
+		//if p.Type == 2 && p.MainAccountID == "" {
+		//	msg = append(msg, "mainAccountId cannot be empty.")
+		//}
 
 		if len(msg) > 0 {
 			return msg, errors.New("request validation status failed")

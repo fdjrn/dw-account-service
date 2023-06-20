@@ -63,7 +63,7 @@ func Register(c *fiber.Ctx) error {
 		return c.Status(400).JSON(Responses{
 			Success: false,
 			Message: "uniqueId has already been registered",
-			Data:    a,
+			Data:    fiber.Map{"uniqueId": a.UniqueID},
 		})
 	}
 
@@ -87,6 +87,13 @@ func Register(c *fiber.Ctx) error {
 	a.SecretKey = key
 	a.Active = true
 	a.LastBalance = encryptedBalance
+	a.LastBalanceNumeric = 0
+	a.PartnerID = "MDL"
+
+	arrUniqueCode := strings.Split(a.UniqueID, "_")
+	a.MerchantID = arrUniqueCode[1]
+	a.TerminalID = arrUniqueCode[0]
+	a.TerminalName = "user-name for terminalId: " + arrUniqueCode[0]
 
 	//a.MainAccountID = "-"
 	a.CreatedAt = time.Now().UnixMilli()
