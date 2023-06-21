@@ -40,11 +40,28 @@ func initAccountRoutes(router fiber.Router) {
 	})
 
 	r.Get("/:id", func(c *fiber.Ctx) error {
-		return h.GetRegisteredAccount(c)
+		return h.GetActiveAccountByID(c)
 	})
 
 	r.Get("/uid/:uid", func(c *fiber.Ctx) error {
-		return h.GetRegisteredAccountByUID(c)
+		//return h.GetActiveAccountByUniqueID(c)
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"success": false,
+			"message": "-- deprecated --",
+			"data":    nil,
+		})
+	})
+
+	r.Post("/detail", func(c *fiber.Ctx) error {
+		return h.GetAccountDetail(c)
+	})
+
+	r.Post("/update-merchant-and-terminal", func(c *fiber.Ctx) error {
+		return h.UpdateMerchantAndTerminalForAccount(c)
+	})
+
+	r.Post("/sync-balance", func(c *fiber.Ctx) error {
+		return h.SyncBalance(c)
 	})
 
 }

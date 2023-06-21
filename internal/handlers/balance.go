@@ -29,7 +29,7 @@ func (b *BalanceHandler) InquiryBalance(c *fiber.Ctx) error {
 		})
 	}
 
-	code, account, err := repository.BalanceRepository.Inquiry(uid)
+	code, account, err := repository.Balance.Inquiry(uid)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return c.Status(code).JSON(Responses{
@@ -79,7 +79,7 @@ func (b *BalanceHandler) TopupBalance(c *fiber.Ctx) error {
 	}
 
 	// 1. check used exRefNumber
-	if repository.TopupRepository.IsUsedExRefNumber(t.ExRefNumber) {
+	if repository.Topup.IsUsedExRefNumber(t.ExRefNumber) {
 		return c.Status(400).JSON(Responses{
 			Success: false,
 			Message: "exRefNumber already used",
@@ -88,7 +88,7 @@ func (b *BalanceHandler) TopupBalance(c *fiber.Ctx) error {
 	}
 
 	// 2. inquiry balance
-	code, balance, err := repository.BalanceRepository.Inquiry(t.UniqueID)
+	code, balance, err := repository.Balance.Inquiry(t.UniqueID)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
@@ -109,7 +109,7 @@ func (b *BalanceHandler) TopupBalance(c *fiber.Ctx) error {
 	t.UpdatedAt = t.CreatedAt
 
 	// 5. insert topup document
-	code, err = repository.TopupRepository.CreateTopupDocument(t)
+	code, err = repository.Topup.CreateTopupDocument(t)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
@@ -118,8 +118,8 @@ func (b *BalanceHandler) TopupBalance(c *fiber.Ctx) error {
 		})
 	}
 
-	// 6. do update document on Account Collection
-	code, err = repository.BalanceRepository.UpdateBalance(t.UniqueID, t.LastBalanceEncrypted)
+	// 6. do update document on AccountRepository Collection
+	code, err = repository.Balance.UpdateBalance(t.UniqueID, t.LastBalanceEncrypted)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
@@ -168,8 +168,8 @@ func (b *BalanceHandler) DeductBalance(c *fiber.Ctx) error {
 		})
 	}
 
-	// 1. Inquiry Balance
-	code, balance, err := repository.BalanceRepository.Inquiry(d.UniqueID)
+	// 1. Inquiry BalanceRepository
+	code, balance, err := repository.Balance.Inquiry(d.UniqueID)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return c.Status(code).JSON(Responses{
@@ -205,7 +205,7 @@ func (b *BalanceHandler) DeductBalance(c *fiber.Ctx) error {
 	d.LastBalanceEncrypted, _ = tools.Encrypt([]byte(balance.SecretKey), fmt.Sprintf("%016s", strLastBalance))
 
 	// 4. Update document
-	code, err = repository.BalanceRepository.UpdateBalance(d.UniqueID, d.LastBalanceEncrypted)
+	code, err = repository.Balance.UpdateBalance(d.UniqueID, d.LastBalanceEncrypted)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
@@ -215,7 +215,7 @@ func (b *BalanceHandler) DeductBalance(c *fiber.Ctx) error {
 	}
 
 	// 5. Fetch updated document
-	_, balance, _ = repository.BalanceRepository.Inquiry(d.UniqueID)
+	_, balance, _ = repository.Balance.Inquiry(d.UniqueID)
 
 	// 6. set default value
 	// untuk PoC masih Hardcoded dulu...

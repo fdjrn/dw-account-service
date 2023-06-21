@@ -12,10 +12,10 @@ import (
 	"time"
 )
 
-type Balance struct {
+type BalanceRepository struct {
 }
 
-func (b *Balance) Inquiry(uid string) (int, entity.BalanceInquiry, error) {
+func (b *BalanceRepository) Inquiry(uid string) (int, entity.BalanceInquiry, error) {
 
 	//id, _ := primitive.ObjectIDFromHex(uid)
 
@@ -39,7 +39,7 @@ func (b *Balance) Inquiry(uid string) (int, entity.BalanceInquiry, error) {
 	return fiber.StatusOK, balance, nil
 }
 
-func (b *Balance) MerchantInquiry(inquiry entity.BalanceInquiry) (int, entity.BalanceInquiry, error) {
+func (b *BalanceRepository) MerchantInquiry(inquiry entity.BalanceInquiry) (int, entity.BalanceInquiry, error) {
 
 	// filter criteria
 	filter := bson.D{
@@ -66,7 +66,7 @@ func (b *Balance) MerchantInquiry(inquiry entity.BalanceInquiry) (int, entity.Ba
 }
 
 // UpdateBalance is a function that update lastBalance field based on supplied uniqueId
-func (b *Balance) UpdateBalance(uid string, lastBalance string) (int, error) {
+func (b *BalanceRepository) UpdateBalance(uid string, lastBalance string) (int, error) {
 
 	// 1. update balance on current document
 	filter := bson.D{{"uniqueId", uid}}
@@ -90,7 +90,7 @@ func (b *Balance) UpdateBalance(uid string, lastBalance string) (int, error) {
 	return fiber.StatusOK, nil
 }
 
-func (b *Balance) UpdateMerchantBalance(t *entity.BalanceTopUp) (int, error) {
+func (b *BalanceRepository) UpdateMerchantBalance(t *entity.BalanceTopUp) (int, error) {
 
 	// 1. update balance on current document
 	filter := bson.D{{"partnerId", t.PartnerID}, {"merchantId", t.MerchantID}}

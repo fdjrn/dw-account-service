@@ -19,7 +19,7 @@ type MerchantHandler struct {
 
 // isExists
 func (m *MerchantHandler) isExists(account *entity.AccountBalance) bool {
-	_, _, err := repository.AccountRepository.FindByMerchantID(account)
+	_, err := repository.Account.FindOne(account)
 	if err != nil {
 		// no document found, its mean it can be registered
 		if err == mongo.ErrNoDocuments {
@@ -29,46 +29,6 @@ func (m *MerchantHandler) isExists(account *entity.AccountBalance) bool {
 		xlogger.Log.Println(err.Error())
 		return true
 	}
-	return true
-}
-
-// isRegistered is a private function that check whether account id has been registered based on phoneNumber
-func (m *MerchantHandler) isRegistered(account *entity.AccountBalance) bool {
-	_, _, err := repository.AccountRepository.FindByMerchantStatus(account, true)
-	if err != nil {
-		// no document found, its mean it can be registered
-		if err == mongo.ErrNoDocuments {
-			return false
-		}
-
-		xlogger.Log.Println(err.Error())
-		return true
-	}
-	return true
-}
-
-// isUnregistered is a private function that check whether account id has been unregistered or not
-func (m *MerchantHandler) isUnregistered(ua *entity.UnregisterAccount) bool {
-
-	acc := new(entity.AccountBalance)
-	acc.MerchantID = ua.MerchantID
-	acc.PartnerID = ua.PartnerID
-
-	_, account, err := repository.AccountRepository.FindByMerchantStatus(acc, false)
-	if err != nil {
-		// no document found, its mean it can be unregistered
-		if err == mongo.ErrNoDocuments {
-			return false
-		}
-
-		xlogger.Log.Println(err.Error())
-		return true
-	}
-
-	if account.(*entity.AccountBalance).Active == true {
-		return false
-	}
-
 	return true
 }
 
@@ -88,10 +48,12 @@ func (m *MerchantHandler) Register(c *fiber.Ctx) error {
 		})
 	}
 
+	payload.Type = repository.AccountTypeMerchant
+
 	if m.isExists(payload) {
 		return c.Status(400).JSON(Responses{
 			Success: false,
-			Message: "merchantId already exists, its probably in deactivated status. ",
+			Message: "merchantId already exists, or its probably in deactivated status. ",
 			Data:    fiber.Map{"merchantId": payload.MerchantID},
 		})
 	}
@@ -114,12 +76,13 @@ func (m *MerchantHandler) Register(c *fiber.Ctx) error {
 
 	payload.SecretKey = key
 	payload.Active = true
+
 	payload.LastBalance = encryptedBalance
 	payload.LastBalanceNumeric = 0
 	payload.CreatedAt = time.Now().UnixMilli()
 	payload.UpdatedAt = payload.CreatedAt
 
-	code, id, err := repository.AccountRepository.InsertDocument(payload)
+	code, id, err := repository.Account.InsertDocument(payload)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
@@ -128,7 +91,7 @@ func (m *MerchantHandler) Register(c *fiber.Ctx) error {
 		})
 	}
 
-	_, createdAccount, _ := repository.AccountRepository.FindByID(id, true)
+	_, createdAccount, _ := repository.Account.FindByID(id, true)
 
 	return c.Status(code).JSON(Responses{
 		Success: true,
@@ -152,16 +115,7 @@ func (m *MerchantHandler) Unregister(c *fiber.Ctx) error {
 		})
 	}
 
-	// check if already been unregistered
-	if m.isUnregistered(u) {
-		return c.Status(400).JSON(Responses{
-			Success: false,
-			Message: "account has already been deactivated",
-			Data:    nil,
-		})
-	}
-
-	code, err := repository.AccountRepository.DeactivateMerchant(u)
+	code, err := repository.Account.DeactivateMerchant(u)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
@@ -171,20 +125,23 @@ func (m *MerchantHandler) Unregister(c *fiber.Ctx) error {
 	}
 
 	// insert into accountDeactivated collection
-	u.CreatedAt = time.Now().Format("2006-06-02 15:04:05")
-	u.UpdatedAt = u.CreatedAt
-	code, _, err = repository.AccountRepository.InsertDeactivatedAccount(u)
+	auditLog := time.Now().Format("2006-01-02 15:04:05")
+	u.Type = repository.AccountTypeMerchant
+	u.CreatedAt = auditLog
+	u.UpdatedAt = auditLog
+	code, _, err = repository.Account.InsertDeactivatedAccount(u)
 
-	ab := new(entity.AccountBalance)
-	ab.PartnerID = u.PartnerID
-	ab.MerchantID = u.MerchantID
+	updAccount := new(entity.AccountBalance)
+	updAccount.PartnerID = u.PartnerID
+	updAccount.MerchantID = u.MerchantID
 
-	_, updatedAccount, _ := repository.AccountRepository.FindByMerchantStatus(ab, false)
+	//_, updatedAccount, _ := repository.Account.FindByMerchantStatus(ab, false)
+	result, _ := repository.Account.FindOne(updAccount)
 
 	return c.Status(code).JSON(Responses{
 		Success: true,
 		Message: "merchant successfully deactivated",
-		Data:    updatedAccount,
+		Data:    result,
 	})
 }
 
@@ -225,7 +182,7 @@ func (m *MerchantHandler) GetMerchants(c *fiber.Ctx) error {
 		req.Size = 10
 	}
 
-	code, merchants, total, pages, err := repository.AccountRepository.FindAllMerchant(req)
+	code, merchants, total, pages, err := repository.Account.FindAllMerchant(req)
 	if err != nil {
 		return c.Status(code).JSON(ResponsePayloadPaginated{
 			Success: false,
@@ -247,46 +204,38 @@ func (m *MerchantHandler) GetMerchants(c *fiber.Ctx) error {
 	})
 }
 
-// GetMerchantByID is used to find registered account with active status = true
-func (m *MerchantHandler) GetMerchantByID(c *fiber.Ctx) error {
-	pid := c.Query("pid")
-	mid := c.Query("mid")
+// GetMerchantDetail is used to find registered merchant with active status = true
+func (m *MerchantHandler) GetMerchantDetail(c *fiber.Ctx) error {
 
-	if pid == "" {
-		return c.Status(400).JSON(Responses{
-			Success: false,
-			Message: "partnerId cannot be empty",
-			Data:    nil,
-		})
-	}
-
-	if mid == "" {
-		return c.Status(400).JSON(Responses{
-			Success: false,
-			Message: "merchantId cannot be empty",
-			Data:    nil,
-		})
-	}
-
+	// new account struct
 	payload := new(entity.AccountBalance)
-	payload.MerchantID = mid
-	payload.PartnerID = pid
+	// parse body payload
+	if err := c.BodyParser(&payload); err != nil {
+		return c.Status(400).JSON(Responses{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
 
-	code, account, err := repository.AccountRepository.FindByMerchantStatus(payload, true)
+	payload.Type = repository.AccountTypeMerchant
+	payload.Active = true
+
+	account, err := repository.Account.FindOne(payload)
 
 	if err != nil {
 		errMsg := err.Error()
 		if err == mongo.ErrNoDocuments {
 			errMsg = "merchants not found or its already been deactivated"
 		}
-		return c.Status(code).JSON(Responses{
+		return c.Status(500).JSON(Responses{
 			Success: false,
 			Message: errMsg,
 			Data:    nil,
 		})
 	}
 
-	return c.Status(code).JSON(Responses{
+	return c.Status(200).JSON(Responses{
 		Success: true,
 		Message: "merchant fetched successfully ",
 		Data:    account,
@@ -294,13 +243,89 @@ func (m *MerchantHandler) GetMerchantByID(c *fiber.Ctx) error {
 
 }
 
+func (m *MerchantHandler) GetMerchantMembers(c *fiber.Ctx) error {
+	// new account struct
+	payload := new(request.PaginatedAccountRequest)
+	// parse body payload
+	if err := c.BodyParser(&payload); err != nil {
+		return c.Status(400).JSON(Responses{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	// validate request
+	if payload.PartnerID == "" {
+		return c.Status(400).JSON(ResponsePayloadPaginated{
+			Success: false,
+			Message: "partnerId cannot be empty",
+			Data:    ResponsePayloadDataPaginated{},
+		})
+	}
+
+	if payload.MerchantID == "" {
+		return c.Status(400).JSON(ResponsePayloadPaginated{
+			Success: false,
+			Message: "merchantId cannot be empty",
+			Data:    ResponsePayloadDataPaginated{},
+		})
+	}
+
+	// set default value
+	if payload.Page == 0 {
+		payload.Page = 1
+	}
+
+	if payload.Size == 0 {
+		payload.Size = 10
+	}
+
+	payload.Type = repository.AccountTypeRegular
+	//payload.Status = repository.AccountStatusActive
+
+	code, merchants, total, pages, err := repository.Account.FindMemberByMerchantPaginated(payload)
+
+	if err != nil {
+		errMsg := err.Error()
+		if err == mongo.ErrNoDocuments {
+			errMsg = "merchants not found or its already been deactivated"
+		}
+		return c.Status(500).JSON(Responses{
+			Success: false,
+			Message: errMsg,
+			Data:    nil,
+		})
+	}
+
+	if err != nil {
+		return c.Status(code).JSON(ResponsePayloadPaginated{
+			Success: false,
+			Message: err.Error(),
+			Data:    ResponsePayloadDataPaginated{},
+		})
+	}
+
+	return c.Status(code).JSON(ResponsePayloadPaginated{
+		Success: true,
+		Message: "members successfully fetched",
+		Data: ResponsePayloadDataPaginated{
+			Result:      merchants,
+			Total:       total,
+			PerPage:     payload.Size,
+			CurrentPage: payload.Page,
+			LastPage:    pages,
+		},
+	})
+
+}
+
 // -------------------------- Transactions ------------------------------
 
 func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
-	// TODO: merchant last balance topup
 
-	// new MerchantTopUpRequest struct
-	payload := new(entity.MerchantTopUpRequest)
+	// new MerchantTrxRequest struct
+	payload := new(entity.MerchantTrxRequest)
 
 	// parse body payload
 	if err := c.BodyParser(&payload); err != nil {
@@ -324,7 +349,7 @@ func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
 	}
 
 	// 1. check used partnerRefNumber
-	if repository.TopupRepository.IsUsedPartnerRefNumber(payload.PartnerRefNumber) {
+	if repository.Topup.IsUsedPartnerRefNumber(payload.PartnerRefNumber) {
 		return c.Status(400).JSON(Responses{
 			Success: false,
 			Message: "partnerRefNumber already used",
@@ -335,7 +360,7 @@ func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
 	}
 
 	// 2. inquiry balance
-	code, balance, err := repository.BalanceRepository.MerchantInquiry(entity.BalanceInquiry{
+	code, balance, err := repository.Balance.MerchantInquiry(entity.BalanceInquiry{
 		MerchantID: payload.MerchantID, PartnerID: payload.PartnerID,
 	})
 	if err != nil {
@@ -372,7 +397,7 @@ func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
 	tBalance.UpdatedAt = tBalance.TransDate
 
 	// 5. insert topup document
-	code, err = repository.TopupRepository.CreateTopupDocument(tBalance)
+	code, err = repository.Topup.CreateTopupDocument(tBalance)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
@@ -381,8 +406,8 @@ func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
 		})
 	}
 
-	// 6. do update document on Account Collection
-	code, err = repository.BalanceRepository.UpdateMerchantBalance(tBalance)
+	// 6. do update document on AccountRepository Collection
+	code, err = repository.Balance.UpdateMerchantBalance(tBalance)
 	if err != nil {
 		return c.Status(code).JSON(Responses{
 			Success: false,
@@ -391,7 +416,7 @@ func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
 		})
 	}
 
-	// 7. publish transaction to broker
+	// TODO: 7. publish transaction to broker
 	//payload, err := json.Marshal(t)
 	//if err != nil {
 	//	log.Println("cannot marshal payload: ", err.Error())
@@ -419,7 +444,7 @@ func (m *MerchantHandler) BalanceInquiry(c *fiber.Ctx) error {
 		})
 	}
 
-	code, account, err := repository.BalanceRepository.MerchantInquiry(payload)
+	code, account, err := repository.Balance.MerchantInquiry(payload)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return c.Status(code).JSON(Responses{
@@ -440,5 +465,80 @@ func (m *MerchantHandler) BalanceInquiry(c *fiber.Ctx) error {
 		Success: true,
 		Message: "balance successfully fetched",
 		Data:    account,
+	})
+}
+
+func (m *MerchantHandler) BalanceDeduct(c *fiber.Ctx) error {
+	return c.Status(200).JSON(fiber.Map{
+		"success": true,
+		"message": "under construction",
+		"data":    nil,
+	})
+}
+
+func (m *MerchantHandler) BalanceDistribution(c *fiber.Ctx) error {
+
+	// new MerchantTrxRequest struct
+	payload := new(entity.MerchantTrxRequest)
+
+	// parse body payload
+	if err := c.BodyParser(&payload); err != nil {
+		return c.Status(400).JSON(Responses{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	// validate request
+	msg, err := tools.ValidateRequest(payload)
+	if err != nil {
+		return c.Status(400).JSON(Responses{
+			Success: false,
+			Message: err.Error(),
+			Data: map[string]interface{}{
+				"errors": msg,
+			},
+		})
+	}
+
+	// TODO 1: check used partnerRefNumber
+
+	// 2: inquiry balance
+	code, balance, err := repository.Balance.MerchantInquiry(entity.BalanceInquiry{
+		MerchantID: payload.MerchantID, PartnerID: payload.PartnerID,
+	})
+	if err != nil {
+		return c.Status(code).JSON(Responses{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	// 3: check total member in merchant
+	countDoc, err := repository.Account.CountMerchantMember(
+		entity.AccountBalance{
+			PartnerID:  payload.PartnerID,
+			MerchantID: payload.MerchantID,
+			Active:     true,
+		})
+
+	if balance.LastBalanceNumeric < (payload.Amount * countDoc) {
+		return c.Status(500).JSON(Responses{
+			Success: false,
+			Message: "insufficient amount to distribute balance to others",
+			Data:    nil,
+		})
+	}
+
+	// TODO 4: update merchant balance amount
+
+	// TODO 5: publish to kafka for history and summary
+
+	return c.Status(200).JSON(fiber.Map{
+		"success": true,
+		"message": "under construction",
+		"data":    nil,
 	})
 }

@@ -14,10 +14,27 @@ import (
 	"time"
 )
 
-type Account struct {
+type AccountRepository struct {
 }
 
-func (a *Account) findByFilter(filter interface{}) (interface{}, error) {
+//func (a *AccountRepository) getDefaultFilter(account *entity.AccountBalance) bson.D {
+//	filter := bson.D{
+//		{"merchantId", account.MerchantID},
+//		{"partnerId", account.PartnerID},
+//	}
+//
+//	if account.TerminalID != "" {
+//		filter = append(filter, bson.D{{"terminalId", account.TerminalID}}...)
+//	}
+//
+//	if account.Type > 0 {
+//		filter = append(filter, bson.D{{"type", account.Type}}...)
+//	}
+//
+//	return filter
+//}
+
+func (a *AccountRepository) findByFilter(filter interface{}) (interface{}, error) {
 	account := new(entity.AccountBalance)
 
 	// filter condition
@@ -42,7 +59,7 @@ return:
 	length: int,
 	err: error
 */
-func (a *Account) FindAll(queryParams string) (int, interface{}, int, error) {
+func (a *AccountRepository) FindAll(queryParams string) (int, interface{}, int, error) {
 	filter := bson.D{}
 
 	if queryParams != "" {
@@ -84,12 +101,12 @@ return:
 	totalPages int,
 	err error
 */
-func (a *Account) FindAllPaginated(request *request.PaginatedAccountRequest) (int, interface{}, int64, int64, error) {
+func (a *AccountRepository) FindAllPaginated(request *request.PaginatedAccountRequest) (int, interface{}, int64, int64, error) {
 	var filter interface{}
 	switch request.Status {
-	case "active":
+	case AccountStatusActive:
 		filter = bson.D{{"active", true}}
-	case "unregistered":
+	case AccountStatusDeactivated:
 		filter = bson.D{{"active", false}}
 	default:
 		filter = bson.D{}
@@ -129,11 +146,11 @@ func (a *Account) FindAllPaginated(request *request.PaginatedAccountRequest) (in
 
 // FindByID : id args accept interface{} or primitive.ObjectID
 // make sure to convert it first
-func (a *Account) FindByID(id interface{}, active bool) (int, interface{}, error) {
+func (a *AccountRepository) FindByID(id interface{}, active bool) (int, interface{}, error) {
 	// filter condition
 	filter := bson.D{{"_id", id}}
 	if active {
-		filter = bson.D{{"_id", id}, {"active", true}}
+		filter = append(filter, bson.D{{"active", true}}...)
 	}
 
 	account, err := a.findByFilter(filter)
@@ -144,7 +161,21 @@ func (a *Account) FindByID(id interface{}, active bool) (int, interface{}, error
 	return fiber.StatusOK, account, nil
 }
 
-func (a *Account) FindByUniqueID(id string, active bool) (int, interface{}, error) {
+func (a *AccountRepository) FindOne(account *entity.AccountBalance) (interface{}, error) {
+
+	result, err := a.findByFilter(GetDefaultAccountFilter(account))
+
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, err
+		}
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (a *AccountRepository) FindByUniqueID(id string, active bool) (int, interface{}, error) {
 
 	filter := bson.D{{"uniqueId", id}}
 	if active {
@@ -164,7 +195,7 @@ func (a *Account) FindByUniqueID(id string, active bool) (int, interface{}, erro
 	return fiber.StatusOK, account, nil
 }
 
-func (a *Account) FindByActiveStatus(id string, status bool) (int, interface{}, error) {
+func (a *AccountRepository) FindByActiveStatus(id string, status bool) (int, interface{}, error) {
 	//id, _ := primitive.ObjectIDFromHex(accountId)
 
 	account, err := a.findByFilter(bson.D{
@@ -179,11 +210,12 @@ func (a *Account) FindByActiveStatus(id string, status bool) (int, interface{}, 
 	return fiber.StatusOK, account, nil
 }
 
-func (a *Account) DeactivateAccount(u *entity.UnregisterAccount) (int, error) {
-	//id, _ := primitive.ObjectIDFromHex(u.UniqueID)
+func (a *AccountRepository) DeactivateAccount(u *entity.UnregisterAccount) (int, error) {
 
-	// filter condition
-	filter := bson.D{{"uniqueId", u.UniqueID}}
+	account := new(entity.AccountBalance)
+	account.PartnerID = u.PartnerID
+	account.MerchantID = u.MerchantID
+	account.TerminalID = u.TerminalID
 
 	// update field
 	update := bson.D{
@@ -193,7 +225,7 @@ func (a *Account) DeactivateAccount(u *entity.UnregisterAccount) (int, error) {
 		}},
 	}
 
-	result, err := db.Mongo.Collection.Account.UpdateOne(context.TODO(), filter, update)
+	result, err := db.Mongo.Collection.Account.UpdateOne(context.TODO(), GetDefaultAccountFilter(account), update)
 	if err != nil {
 		return fiber.StatusInternalServerError, err
 	}
@@ -206,7 +238,7 @@ func (a *Account) DeactivateAccount(u *entity.UnregisterAccount) (int, error) {
 	return fiber.StatusOK, nil
 }
 
-func (a *Account) DeactivateMerchant(u *entity.UnregisterAccount) (int, error) {
+func (a *AccountRepository) DeactivateMerchant(u *entity.UnregisterAccount) (int, error) {
 	//id, _ := primitive.ObjectIDFromHex(u.UniqueID)
 
 	// filter condition
@@ -233,7 +265,7 @@ func (a *Account) DeactivateMerchant(u *entity.UnregisterAccount) (int, error) {
 	return fiber.StatusOK, nil
 }
 
-func (a *Account) InsertDocument(account *entity.AccountBalance) (int, interface{}, error) {
+func (a *AccountRepository) InsertDocument(account *entity.AccountBalance) (int, interface{}, error) {
 
 	result, err := db.Mongo.Collection.Account.InsertOne(context.TODO(), account)
 
@@ -245,7 +277,7 @@ func (a *Account) InsertDocument(account *entity.AccountBalance) (int, interface
 
 }
 
-func (a *Account) InsertDeactivatedAccount(account *entity.UnregisterAccount) (int, interface{}, error) {
+func (a *AccountRepository) InsertDeactivatedAccount(account *entity.UnregisterAccount) (int, interface{}, error) {
 
 	result, err := db.Mongo.Collection.UnregisterAccount.InsertOne(context.TODO(), account)
 
@@ -257,7 +289,7 @@ func (a *Account) InsertDeactivatedAccount(account *entity.UnregisterAccount) (i
 
 }
 
-func (a *Account) RemoveDeactivatedAccount(acc *entity.UnregisterAccount) (int, error) {
+func (a *AccountRepository) RemoveDeactivatedAccount(acc *entity.UnregisterAccount) (int, error) {
 	filter := bson.D{{"uniqueId", acc.UniqueID}}
 	result, err := db.Mongo.Collection.UnregisterAccount.DeleteOne(context.TODO(), filter)
 
@@ -274,14 +306,14 @@ func (a *Account) RemoveDeactivatedAccount(acc *entity.UnregisterAccount) (int, 
 
 // ----------------- MERCHANTS ----------------
 
-func (a *Account) FindAllMerchant(request *request.PaginatedAccountRequest) (int, interface{}, int64, int64, error) {
+func (a *AccountRepository) FindAllMerchant(request *request.PaginatedAccountRequest) (int, interface{}, int64, int64, error) {
 	//var filter interface{}
 
 	filter := bson.D{}
 	switch request.Status {
-	case "active":
+	case AccountStatusActive:
 		filter = append(filter, bson.D{{"active", true}}...)
-	case "unregistered":
+	case AccountStatusDeactivated:
 		filter = append(filter, bson.D{{"active", false}}...)
 	default:
 	}
@@ -323,11 +355,13 @@ func (a *Account) FindAllMerchant(request *request.PaginatedAccountRequest) (int
 	return fiber.StatusOK, &accounts, totalDocs, int64(totalPages), nil
 }
 
-func (a *Account) FindByMerchantID(ab *entity.AccountBalance) (int, interface{}, error) {
+func (a *AccountRepository) FindByMerchantID(ab *entity.AccountBalance) (int, interface{}, error) {
 
 	filter := bson.D{
 		{"merchantId", ab.MerchantID},
 		{"partnerId", ab.PartnerID},
+		{"terminalId", ab.TerminalID},
+		{"type", AccountTypeMerchant},
 	}
 
 	account, err := a.findByFilter(filter)
@@ -342,7 +376,7 @@ func (a *Account) FindByMerchantID(ab *entity.AccountBalance) (int, interface{},
 	return fiber.StatusOK, account, nil
 }
 
-func (a *Account) FindByMerchantStatus(ab *entity.AccountBalance, active bool) (int, interface{}, error) {
+func (a *AccountRepository) FindByMerchantStatus(ab *entity.AccountBalance, active bool) (int, interface{}, error) {
 
 	filter := bson.D{
 		{"merchantId", ab.MerchantID},
@@ -363,4 +397,108 @@ func (a *Account) FindByMerchantStatus(ab *entity.AccountBalance, active bool) (
 	}
 
 	return fiber.StatusOK, account, nil
+}
+
+/*
+CountMerchantMember
+out params:
+
+	totalDoc int
+	documents interface{}
+	err error
+*/
+func (a *AccountRepository) CountMerchantMember(account entity.AccountBalance) (int64, error) {
+	filter := bson.D{
+		{"partnerId", account.PartnerID},
+		{"merchantId", account.MerchantID},
+		{"active", account.Active},
+	}
+
+	ctx, cancel := context.WithTimeout(context.TODO(), 1*time.Second)
+	defer cancel()
+
+	totalDocs, err := db.Mongo.Collection.Account.CountDocuments(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+
+	return totalDocs, nil
+}
+
+func (a *AccountRepository) FindMemberByMerchant(account entity.AccountBalance) (int64, interface{}, error) {
+	filter := bson.D{
+		{"partnerId", account.PartnerID},
+		{"merchantId", account.MerchantID},
+		{"active", account.Active},
+	}
+
+	ctx, cancel := context.WithTimeout(context.TODO(), 2*time.Second)
+	defer cancel()
+
+	cursor, err := db.Mongo.Collection.Account.Find(ctx, filter)
+
+	if err != nil {
+		return 0, nil, err
+	}
+
+	var accounts []entity.AccountBalance
+	if err = cursor.All(context.TODO(), &accounts); err != nil {
+		return 0, nil, err
+	}
+
+	totalDocs, _ := db.Mongo.Collection.Account.CountDocuments(ctx, filter)
+
+	if len(accounts) == 0 {
+		return 0, nil, errors.New("empty results or last pages has been reached")
+	}
+
+	return totalDocs, &accounts, nil
+}
+
+func (a *AccountRepository) FindMemberByMerchantPaginated(request *request.PaginatedAccountRequest) (int, interface{}, int64, int64, error) {
+	filter := bson.D{}
+	switch request.Status {
+	case AccountStatusActive:
+		filter = bson.D{{"active", true}}
+	case AccountStatusDeactivated:
+		filter = bson.D{{"active", false}}
+	default:
+	}
+
+	filter = append(filter, bson.D{
+		{"partnerId", request.PartnerID},
+		{"merchantId", request.MerchantID},
+		{"type", request.Type},
+	}...)
+
+	skipValue := (request.Page - 1) * request.Size
+
+	ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
+	defer cancel()
+
+	cursor, err := db.Mongo.Collection.Account.Find(
+		ctx,
+		filter,
+		options.Find().
+			SetProjection(bson.D{{"secretKey", 0}, {"lastBalance", 0}}).
+			SetSkip(skipValue).
+			SetLimit(request.Size),
+	)
+
+	if err != nil {
+		return fiber.StatusInternalServerError, nil, 0, 0, err
+	}
+
+	totalDocs, _ := db.Mongo.Collection.Account.CountDocuments(ctx, filter)
+	var accounts []entity.AccountBalance
+	if err = cursor.All(context.TODO(), &accounts); err != nil {
+		return fiber.StatusInternalServerError, nil, 0, 0, err
+	}
+
+	if len(accounts) == 0 {
+		return fiber.StatusInternalServerError, nil, 0, 0, errors.New("empty results or last pages has been reached")
+	}
+
+	totalPages := math.Ceil(float64(totalDocs) / float64(request.Size))
+	return fiber.StatusOK, &accounts, totalDocs, int64(totalPages), nil
 }

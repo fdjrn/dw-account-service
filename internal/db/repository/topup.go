@@ -9,10 +9,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type Topup struct {
+type TopupRepository struct {
 }
 
-func (t *Topup) CreateTopupDocument(e *entity.BalanceTopUp) (int, error) {
+func (t *TopupRepository) CreateTopupDocument(e *entity.BalanceTopUp) (int, error) {
 	_, err := db.Mongo.Collection.BalanceTopup.InsertOne(context.TODO(), e)
 
 	if err != nil {
@@ -22,7 +22,7 @@ func (t *Topup) CreateTopupDocument(e *entity.BalanceTopUp) (int, error) {
 	return fiber.StatusCreated, nil
 }
 
-func (t *Topup) IsUsedExRefNumber(refNo string) bool {
+func (t *TopupRepository) IsUsedExRefNumber(refNo string) bool {
 
 	// filter condition
 	filter := bson.D{{"exRefNumber", refNo}}
@@ -40,7 +40,7 @@ func (t *Topup) IsUsedExRefNumber(refNo string) bool {
 
 }
 
-func (t *Topup) IsUsedPartnerRefNumber(refNo string) bool {
+func (t *TopupRepository) IsUsedPartnerRefNumber(refNo string) bool {
 
 	// filter condition
 	filter := bson.D{{"partnerRefNumber", refNo}}

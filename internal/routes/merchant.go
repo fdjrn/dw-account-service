@@ -21,13 +21,13 @@ func initMerchantRoutes(router fiber.Router) {
 		return h.GetMerchants(c)
 	})
 
-	r.Get("/", func(c *fiber.Ctx) error {
-		return h.GetMerchantByID(c)
+	r.Post("/", func(c *fiber.Ctx) error {
+		return h.GetMerchantDetail(c)
 	})
 
-	//r.Get("/uid/:uid", func(c *fiber.Ctx) error {
-	//	return h.GetRegisteredAccountByUID(c)
-	//})
+	r.Post("/members", func(c *fiber.Ctx) error {
+		return h.GetMerchantMembers(c)
+	})
 
 	// ------------ TRX ------------
 
@@ -37,5 +37,13 @@ func initMerchantRoutes(router fiber.Router) {
 
 	r.Post("/balance/inquiry", func(c *fiber.Ctx) error {
 		return h.BalanceInquiry(c)
+	})
+
+	r.Post("/balance/deduct", func(c *fiber.Ctx) error {
+		return h.BalanceDeduct(c)
+	})
+
+	r.Post("/balance/distribute", func(c *fiber.Ctx) error {
+		return h.BalanceDistribution(c)
 	})
 }

@@ -30,7 +30,7 @@ func ValidateRequest(payload interface{}) (interface{}, error) {
 			msg = append(msg, "exRefNumber must be greater than 0.")
 		}
 
-	case *entity.MerchantTopUpRequest:
+	case *entity.MerchantTrxRequest:
 		if p.PartnerID == "" {
 			msg = append(msg, "partnerId cannot be empty.")
 		}
@@ -73,32 +73,38 @@ func ValidateRequest(payload interface{}) (interface{}, error) {
 		}
 
 	case *entity.AccountBalance:
-		if p.UniqueID == "" && p.Type == 1 {
-			msg = append(msg, "uniqueId cannot be empty.")
-		}
 
 		if p.Type == 0 {
 			msg = append(msg, "type cannot be empty. eg: 1 (regular) or 2 (admin)")
+			return msg, errors.New("request validation status failed")
 		}
 
 		if p.Type > 2 {
 			msg = append(msg, "unsupported account type. only: 1 (regular) or 2 (merchant)")
+			return msg, errors.New("request validation status failed")
 		}
 
-		if p.Type == 2 {
-			if p.PartnerID == "" {
-				msg = append(msg, "partnerId cannot be empty.")
-			}
-
-			if p.MerchantID == "" {
-				msg = append(msg, "merchantId cannot be empty.")
-			}
+		// if non-merchant account type
+		if p.Type == 1 && p.TerminalID == "" {
+			msg = append(msg, "terminalId cannot be empty.")
 		}
 
-		//if p.Type == 2 && p.MainAccountID == "" {
-		//	msg = append(msg, "mainAccountId cannot be empty.")
-		//}
+		if p.PartnerID == "" {
+			msg = append(msg, "partnerId cannot be empty.")
+		}
 
+		if p.MerchantID == "" {
+			msg = append(msg, "merchantId cannot be empty.")
+		}
+
+	//case *entity.DefaultMerchantRequest:
+	//	if p.PartnerID == "" {
+	//		msg = append(msg, "partnerId cannot be empty.")
+	//	}
+	//
+	//	if p.MerchantID == "" {
+	//		msg = append(msg, "merchantId cannot be empty.")
+	//	}
 	default:
 	}
 
@@ -107,4 +113,27 @@ func ValidateRequest(payload interface{}) (interface{}, error) {
 	}
 	return msg, nil
 
+}
+
+func ValidateAccountDetailRequest(p *entity.AccountBalance) (interface{}, error) {
+	var errMsq []string
+
+	// if non-merchant account type
+	if p.TerminalID == "" {
+		errMsq = append(errMsq, "terminalId cannot be empty.")
+	}
+
+	if p.PartnerID == "" {
+		errMsq = append(errMsq, "partnerId cannot be empty.")
+	}
+
+	if p.MerchantID == "" {
+		errMsq = append(errMsq, "merchantId cannot be empty.")
+	}
+
+	if len(errMsq) > 0 {
+		return errMsq, errors.New("request validation status failed")
+	}
+
+	return errMsq, nil
 }

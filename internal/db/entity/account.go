@@ -14,7 +14,7 @@ type AccountBalance struct {
 	// Status Account Balance (wallet) pengguna. Value -->> active: true/false
 	Active bool `json:"active" bson:"active"`
 
-	// Tipe Wallet pengguna, expected value -->> 1:Regular Account, 2: Admin Account
+	// Tipe Wallet pengguna, expected value -->> 1:Regular Account, 2: Merchant Account
 	Type int `json:"type" bson:"type"`
 
 	// Hashed/Encrypted nilai saldo akhir (lastBalance)
@@ -52,6 +52,8 @@ type UnregisterAccount struct {
 	UniqueID          string `json:"uniqueId,omitempty" bson:"uniqueId"`
 	PartnerID         string `json:"partnerId,omitempty" bson:"partnerId"`
 	MerchantID        string `json:"merchantId,omitempty" bson:"merchantId"`
+	TerminalID        string `json:"terminalId,omitempty" bson:"terminalId"`
+	Type              int    `json:"type" bson:"type"`
 	ReasonCode        int    `json:"reasonCode" bson:"reasonCode"`
 	ReasonDescription string `json:"reasonDescription" bson:"reasonDescription"`
 	CreatedAt         string `json:"createdAt,omitempty" bson:"createdAt,omitempty"`
