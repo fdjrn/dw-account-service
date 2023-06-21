@@ -4,6 +4,7 @@ import (
 	"github.com/dw-account-service/pkg/xlogger"
 	"github.com/spf13/viper"
 	"log"
+	"strings"
 )
 
 type ServerConfig struct {
@@ -87,6 +88,7 @@ func Initialize() error {
 	}
 
 	xlogger.Log.SetPrefix("[INIT-APP] ")
+	xlogger.Log.Println(strings.Repeat("-", 40))
 	xlogger.Log.Println("| configuration >> loaded")
 	return nil
 }
