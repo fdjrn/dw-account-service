@@ -6,7 +6,7 @@ import (
 	"github.com/dw-account-service/internal/db"
 	"github.com/dw-account-service/internal/db/entity"
 	"github.com/dw-account-service/internal/db/repository"
-	"github.com/dw-account-service/pkg/payload/request"
+	"github.com/dw-account-service/internal/handlers/validator"
 	"github.com/dw-account-service/pkg/tools"
 	"github.com/dw-account-service/pkg/xlogger"
 	"github.com/gofiber/fiber/v2"
@@ -42,7 +42,7 @@ func (a *AccountHandler) Register(c *fiber.Ctx) error {
 
 	// parse body payload
 	if err = c.BodyParser(&payload); err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -52,9 +52,9 @@ func (a *AccountHandler) Register(c *fiber.Ctx) error {
 	payload.Type = repository.AccountTypeRegular
 
 	// validate request
-	validation, err := tools.ValidateRequest(payload)
+	validation, err := validator.ValidateRequest(payload)
 	if err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data: map[string]interface{}{
@@ -64,7 +64,7 @@ func (a *AccountHandler) Register(c *fiber.Ctx) error {
 	}
 
 	if a.isExists(payload) {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: "account already exists, or its probably in deactivated status. ",
 			Data: map[string]interface{}{
@@ -89,7 +89,7 @@ func (a *AccountHandler) Register(c *fiber.Ctx) error {
 
 	code, insertedId, err := repository.Account.InsertDocument(payload)
 	if err != nil {
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -98,7 +98,7 @@ func (a *AccountHandler) Register(c *fiber.Ctx) error {
 
 	_, createdAccount, _ := repository.Account.FindByID(insertedId, true)
 
-	return c.Status(code).JSON(Responses{
+	return c.Status(code).JSON(entity.Responses{
 		Success: true,
 		Message: "account successfully registered",
 		Data:    createdAccount,
@@ -112,7 +112,7 @@ func (a *AccountHandler) Unregister(c *fiber.Ctx) error {
 
 	// parse body payload
 	if err := c.BodyParser(uac); err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -121,7 +121,7 @@ func (a *AccountHandler) Unregister(c *fiber.Ctx) error {
 
 	code, err := repository.Account.DeactivateAccount(uac)
 	if err != nil {
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -142,7 +142,7 @@ func (a *AccountHandler) Unregister(c *fiber.Ctx) error {
 
 	result, _ := repository.Account.FindOne(updAccount)
 
-	return c.Status(code).JSON(Responses{
+	return c.Status(code).JSON(entity.Responses{
 		Success: true,
 		Message: "account successfully unregistered",
 		Data:    result,
@@ -151,11 +151,11 @@ func (a *AccountHandler) Unregister(c *fiber.Ctx) error {
 
 func (a *AccountHandler) GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
 
-	var req = new(request.PaginatedAccountRequest)
+	var req = new(entity.PaginatedAccountRequest)
 
 	// parse body payload
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -168,7 +168,7 @@ func (a *AccountHandler) GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
 	validStatus := map[string]interface{}{"all": 0, "active": 1, "deactivated": 2}
 	if req.Status != "" {
 		if _, ok := validStatus[req.Status]; !ok {
-			return c.Status(400).JSON(Responses{
+			return c.Status(400).JSON(entity.Responses{
 				Success: false,
 				Message: "invalid status value. its only accept all, active or deactivated",
 				Data:    nil,
@@ -188,17 +188,17 @@ func (a *AccountHandler) GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
 
 	code, accounts, total, pages, err := repository.Account.FindAllPaginated(req)
 	if err != nil {
-		return c.Status(code).JSON(ResponsePayloadPaginated{
+		return c.Status(code).JSON(entity.ResponsePayloadPaginated{
 			Success: false,
 			Message: err.Error(),
-			Data:    ResponsePayloadDataPaginated{},
+			Data:    entity.ResponsePayloadDataPaginated{},
 		})
 	}
 
-	return c.Status(code).JSON(ResponsePayloadPaginated{
+	return c.Status(code).JSON(entity.ResponsePayloadPaginated{
 		Success: true,
 		Message: msgResponse,
-		Data: ResponsePayloadDataPaginated{
+		Data: entity.ResponsePayloadDataPaginated{
 			Result:      accounts,
 			Total:       total,
 			PerPage:     req.Size,
@@ -217,14 +217,14 @@ func (a *AccountHandler) GetActiveAccountByID(c *fiber.Ctx) error {
 		if err == mongo.ErrNoDocuments {
 			errMsg = "account not found or its already been unregistered"
 		}
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: errMsg,
 			Data:    nil,
 		})
 	}
 
-	return c.Status(code).JSON(Responses{
+	return c.Status(code).JSON(entity.Responses{
 		Success: true,
 		Message: "account fetched successfully ",
 		Data:    account,
@@ -241,14 +241,14 @@ func (a *AccountHandler) GetActiveAccountByUniqueID(c *fiber.Ctx) error {
 			errMsg = "account not found or its already been unregistered"
 		}
 
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: errMsg,
 			Data:    nil,
 		})
 	}
 
-	return c.Status(code).JSON(Responses{
+	return c.Status(code).JSON(entity.Responses{
 		Success: true,
 		Message: "account fetched successfully ",
 		Data:    account,
@@ -263,7 +263,7 @@ func (a *AccountHandler) GetAccountDetail(c *fiber.Ctx) error {
 
 	// parse body payload
 	if err := c.BodyParser(&payload); err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -271,9 +271,9 @@ func (a *AccountHandler) GetAccountDetail(c *fiber.Ctx) error {
 	}
 
 	// validate request
-	validation, err := tools.ValidateAccountDetailRequest(payload)
+	validation, err := validator.ValidateAccountDetailRequest(payload)
 	if err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data: map[string]interface{}{
@@ -290,14 +290,14 @@ func (a *AccountHandler) GetAccountDetail(c *fiber.Ctx) error {
 			errMsg = "account not found or its already been unregistered"
 		}
 
-		return c.Status(500).JSON(Responses{
+		return c.Status(500).JSON(entity.Responses{
 			Success: false,
 			Message: errMsg,
 			Data:    nil,
 		})
 	}
 
-	return c.Status(200).JSON(Responses{
+	return c.Status(200).JSON(entity.Responses{
 		Success: true,
 		Message: "account fetched successfully ",
 		Data:    account,

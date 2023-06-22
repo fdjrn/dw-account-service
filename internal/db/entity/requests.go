@@ -1,4 +1,4 @@
-package request
+package entity
 
 type PaginatedAccountRequest struct {
 	PartnerID string `json:"partnerId,omitempty"`

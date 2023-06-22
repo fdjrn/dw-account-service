@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/dw-account-service/internal/db/entity"
 	"github.com/dw-account-service/internal/db/repository"
-	"github.com/dw-account-service/pkg/payload/request"
+	"github.com/dw-account-service/internal/handlers/validator"
 	"github.com/dw-account-service/pkg/tools"
 	"github.com/dw-account-service/pkg/xlogger"
 	"github.com/gofiber/fiber/v2"
@@ -41,7 +41,7 @@ func (m *MerchantHandler) Register(c *fiber.Ctx) error {
 
 	// parse body payload
 	if err = c.BodyParser(&payload); err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -51,7 +51,7 @@ func (m *MerchantHandler) Register(c *fiber.Ctx) error {
 	payload.Type = repository.AccountTypeMerchant
 
 	if m.isExists(payload) {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: "merchantId already exists, or its probably in deactivated status. ",
 			Data:    fiber.Map{"merchantId": payload.MerchantID},
@@ -59,9 +59,9 @@ func (m *MerchantHandler) Register(c *fiber.Ctx) error {
 	}
 
 	// validate request
-	validation, err := tools.ValidateRequest(payload)
+	validation, err := validator.ValidateRequest(payload)
 	if err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data: map[string]interface{}{
@@ -84,7 +84,7 @@ func (m *MerchantHandler) Register(c *fiber.Ctx) error {
 
 	code, id, err := repository.Account.InsertDocument(payload)
 	if err != nil {
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -93,7 +93,7 @@ func (m *MerchantHandler) Register(c *fiber.Ctx) error {
 
 	_, createdAccount, _ := repository.Account.FindByID(id, true)
 
-	return c.Status(code).JSON(Responses{
+	return c.Status(code).JSON(entity.Responses{
 		Success: true,
 		Message: "merchant successfully registered",
 		Data:    createdAccount,
@@ -108,7 +108,7 @@ func (m *MerchantHandler) Unregister(c *fiber.Ctx) error {
 
 	// parse body payload
 	if err := c.BodyParser(u); err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -117,7 +117,7 @@ func (m *MerchantHandler) Unregister(c *fiber.Ctx) error {
 
 	code, err := repository.Account.DeactivateMerchant(u)
 	if err != nil {
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -138,7 +138,7 @@ func (m *MerchantHandler) Unregister(c *fiber.Ctx) error {
 	//_, updatedAccount, _ := repository.Account.FindByMerchantStatus(ab, false)
 	result, _ := repository.Account.FindOne(updAccount)
 
-	return c.Status(code).JSON(Responses{
+	return c.Status(code).JSON(entity.Responses{
 		Success: true,
 		Message: "merchant successfully deactivated",
 		Data:    result,
@@ -147,11 +147,11 @@ func (m *MerchantHandler) Unregister(c *fiber.Ctx) error {
 
 func (m *MerchantHandler) GetMerchants(c *fiber.Ctx) error {
 
-	var req = new(request.PaginatedAccountRequest)
+	var req = new(entity.PaginatedAccountRequest)
 
 	// parse body payload
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -164,7 +164,7 @@ func (m *MerchantHandler) GetMerchants(c *fiber.Ctx) error {
 	validStatus := map[string]interface{}{"all": 0, "active": 1, "deactivated": 2}
 	if req.Status != "" {
 		if _, ok := validStatus[req.Status]; !ok {
-			return c.Status(400).JSON(Responses{
+			return c.Status(400).JSON(entity.Responses{
 				Success: false,
 				Message: "invalid status value. its only accept all, active or deactivated",
 				Data:    nil,
@@ -184,17 +184,17 @@ func (m *MerchantHandler) GetMerchants(c *fiber.Ctx) error {
 
 	code, merchants, total, pages, err := repository.Account.FindAllMerchant(req)
 	if err != nil {
-		return c.Status(code).JSON(ResponsePayloadPaginated{
+		return c.Status(code).JSON(entity.ResponsePayloadPaginated{
 			Success: false,
 			Message: err.Error(),
-			Data:    ResponsePayloadDataPaginated{},
+			Data:    entity.ResponsePayloadDataPaginated{},
 		})
 	}
 
-	return c.Status(code).JSON(ResponsePayloadPaginated{
+	return c.Status(code).JSON(entity.ResponsePayloadPaginated{
 		Success: true,
 		Message: msgResponse,
-		Data: ResponsePayloadDataPaginated{
+		Data: entity.ResponsePayloadDataPaginated{
 			Result:      merchants,
 			Total:       total,
 			PerPage:     req.Size,
@@ -211,7 +211,7 @@ func (m *MerchantHandler) GetMerchantDetail(c *fiber.Ctx) error {
 	payload := new(entity.AccountBalance)
 	// parse body payload
 	if err := c.BodyParser(&payload); err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -228,14 +228,14 @@ func (m *MerchantHandler) GetMerchantDetail(c *fiber.Ctx) error {
 		if err == mongo.ErrNoDocuments {
 			errMsg = "merchants not found or its already been deactivated"
 		}
-		return c.Status(500).JSON(Responses{
+		return c.Status(500).JSON(entity.Responses{
 			Success: false,
 			Message: errMsg,
 			Data:    nil,
 		})
 	}
 
-	return c.Status(200).JSON(Responses{
+	return c.Status(200).JSON(entity.Responses{
 		Success: true,
 		Message: "merchant fetched successfully ",
 		Data:    account,
@@ -245,10 +245,10 @@ func (m *MerchantHandler) GetMerchantDetail(c *fiber.Ctx) error {
 
 func (m *MerchantHandler) GetMerchantMembers(c *fiber.Ctx) error {
 	// new account struct
-	payload := new(request.PaginatedAccountRequest)
+	payload := new(entity.PaginatedAccountRequest)
 	// parse body payload
 	if err := c.BodyParser(&payload); err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -257,18 +257,18 @@ func (m *MerchantHandler) GetMerchantMembers(c *fiber.Ctx) error {
 
 	// validate request
 	if payload.PartnerID == "" {
-		return c.Status(400).JSON(ResponsePayloadPaginated{
+		return c.Status(400).JSON(entity.ResponsePayloadPaginated{
 			Success: false,
 			Message: "partnerId cannot be empty",
-			Data:    ResponsePayloadDataPaginated{},
+			Data:    entity.ResponsePayloadDataPaginated{},
 		})
 	}
 
 	if payload.MerchantID == "" {
-		return c.Status(400).JSON(ResponsePayloadPaginated{
+		return c.Status(400).JSON(entity.ResponsePayloadPaginated{
 			Success: false,
 			Message: "merchantId cannot be empty",
-			Data:    ResponsePayloadDataPaginated{},
+			Data:    entity.ResponsePayloadDataPaginated{},
 		})
 	}
 
@@ -291,7 +291,7 @@ func (m *MerchantHandler) GetMerchantMembers(c *fiber.Ctx) error {
 		if err == mongo.ErrNoDocuments {
 			errMsg = "merchants not found or its already been deactivated"
 		}
-		return c.Status(500).JSON(Responses{
+		return c.Status(500).JSON(entity.Responses{
 			Success: false,
 			Message: errMsg,
 			Data:    nil,
@@ -299,17 +299,17 @@ func (m *MerchantHandler) GetMerchantMembers(c *fiber.Ctx) error {
 	}
 
 	if err != nil {
-		return c.Status(code).JSON(ResponsePayloadPaginated{
+		return c.Status(code).JSON(entity.ResponsePayloadPaginated{
 			Success: false,
 			Message: err.Error(),
-			Data:    ResponsePayloadDataPaginated{},
+			Data:    entity.ResponsePayloadDataPaginated{},
 		})
 	}
 
-	return c.Status(code).JSON(ResponsePayloadPaginated{
+	return c.Status(code).JSON(entity.ResponsePayloadPaginated{
 		Success: true,
 		Message: "members successfully fetched",
-		Data: ResponsePayloadDataPaginated{
+		Data: entity.ResponsePayloadDataPaginated{
 			Result:      merchants,
 			Total:       total,
 			PerPage:     payload.Size,
@@ -329,7 +329,7 @@ func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
 
 	// parse body payload
 	if err := c.BodyParser(&payload); err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -337,9 +337,9 @@ func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
 	}
 
 	// validate request
-	msg, err := tools.ValidateRequest(payload)
+	msg, err := validator.ValidateRequest(payload)
 	if err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data: map[string]interface{}{
@@ -350,7 +350,7 @@ func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
 
 	// 1. check used partnerRefNumber
 	if repository.Topup.IsUsedPartnerRefNumber(payload.PartnerRefNumber) {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: "partnerRefNumber already used",
 			Data: fiber.Map{
@@ -364,7 +364,7 @@ func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
 		MerchantID: payload.MerchantID, PartnerID: payload.PartnerID,
 	})
 	if err != nil {
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -399,7 +399,7 @@ func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
 	// 5. insert topup document
 	code, err = repository.Topup.CreateTopupDocument(tBalance)
 	if err != nil {
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -409,7 +409,7 @@ func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
 	// 6. do update document on AccountRepository Collection
 	code, err = repository.Balance.UpdateMerchantBalance(tBalance)
 	if err != nil {
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -424,7 +424,7 @@ func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
 	//
 	//_ = kafka.ProduceMsg(kafka.TopUpTopic, payload)
 
-	return c.Status(code).JSON(Responses{
+	return c.Status(code).JSON(entity.Responses{
 		Success: true,
 		Message: "account balance has been top-up successfully",
 		Data:    tBalance,
@@ -437,7 +437,7 @@ func (m *MerchantHandler) BalanceInquiry(c *fiber.Ctx) error {
 
 	// parse body payload
 	if err := c.BodyParser(&payload); err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -447,21 +447,21 @@ func (m *MerchantHandler) BalanceInquiry(c *fiber.Ctx) error {
 	code, account, err := repository.Balance.MerchantInquiry(payload)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return c.Status(code).JSON(Responses{
+			return c.Status(code).JSON(entity.Responses{
 				Success: false,
 				Message: "balance not found or it has been unregistered",
 				Data:    nil,
 			})
 		}
 
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: "failed to inquiry last balance on current merchant",
 			Data:    nil,
 		})
 	}
 
-	return c.Status(code).JSON(Responses{
+	return c.Status(code).JSON(entity.Responses{
 		Success: true,
 		Message: "balance successfully fetched",
 		Data:    account,
@@ -483,7 +483,7 @@ func (m *MerchantHandler) BalanceDistribution(c *fiber.Ctx) error {
 
 	// parse body payload
 	if err := c.BodyParser(&payload); err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -491,9 +491,9 @@ func (m *MerchantHandler) BalanceDistribution(c *fiber.Ctx) error {
 	}
 
 	// validate request
-	msg, err := tools.ValidateRequest(payload)
+	msg, err := validator.ValidateRequest(payload)
 	if err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data: map[string]interface{}{
@@ -509,7 +509,7 @@ func (m *MerchantHandler) BalanceDistribution(c *fiber.Ctx) error {
 		MerchantID: payload.MerchantID, PartnerID: payload.PartnerID,
 	})
 	if err != nil {
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -525,7 +525,7 @@ func (m *MerchantHandler) BalanceDistribution(c *fiber.Ctx) error {
 		})
 
 	if balance.LastBalanceNumeric < (payload.Amount * countDoc) {
-		return c.Status(500).JSON(Responses{
+		return c.Status(500).JSON(entity.Responses{
 			Success: false,
 			Message: "insufficient amount to distribute balance to others",
 			Data:    nil,

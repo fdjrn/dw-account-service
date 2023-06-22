@@ -1,4 +1,4 @@
-package handlers
+package entity
 
 type Responses struct {
 	Success bool        `json:"success"`

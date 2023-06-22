@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/dw-account-service/internal/db"
 	"github.com/dw-account-service/internal/db/entity"
-	"github.com/dw-account-service/pkg/payload/request"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -101,7 +100,7 @@ return:
 	totalPages int,
 	err error
 */
-func (a *AccountRepository) FindAllPaginated(request *request.PaginatedAccountRequest) (int, interface{}, int64, int64, error) {
+func (a *AccountRepository) FindAllPaginated(request *entity.PaginatedAccountRequest) (int, interface{}, int64, int64, error) {
 	var filter interface{}
 	switch request.Status {
 	case AccountStatusActive:
@@ -306,7 +305,7 @@ func (a *AccountRepository) RemoveDeactivatedAccount(acc *entity.UnregisterAccou
 
 // ----------------- MERCHANTS ----------------
 
-func (a *AccountRepository) FindAllMerchant(request *request.PaginatedAccountRequest) (int, interface{}, int64, int64, error) {
+func (a *AccountRepository) FindAllMerchant(request *entity.PaginatedAccountRequest) (int, interface{}, int64, int64, error) {
 	//var filter interface{}
 
 	filter := bson.D{}
@@ -455,7 +454,7 @@ func (a *AccountRepository) FindMemberByMerchant(account entity.AccountBalance) 
 	return totalDocs, &accounts, nil
 }
 
-func (a *AccountRepository) FindMemberByMerchantPaginated(request *request.PaginatedAccountRequest) (int, interface{}, int64, int64, error) {
+func (a *AccountRepository) FindMemberByMerchantPaginated(request *entity.PaginatedAccountRequest) (int, interface{}, int64, int64, error) {
 	filter := bson.D{}
 	switch request.Status {
 	case AccountStatusActive:

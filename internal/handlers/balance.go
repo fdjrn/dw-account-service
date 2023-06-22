@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"github.com/dw-account-service/internal/handlers/validator"
 	"go.mongodb.org/mongo-driver/mongo"
 
 	"fmt"
@@ -22,7 +23,7 @@ func (b *BalanceHandler) InquiryBalance(c *fiber.Ctx) error {
 
 	uid := c.Params("uid")
 	if uid == "" {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: "uniqueId cannot be empty",
 			Data:    nil,
@@ -32,21 +33,21 @@ func (b *BalanceHandler) InquiryBalance(c *fiber.Ctx) error {
 	code, account, err := repository.Balance.Inquiry(uid)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return c.Status(code).JSON(Responses{
+			return c.Status(code).JSON(entity.Responses{
 				Success: false,
 				Message: "balance not found or it has been unregistered",
 				Data:    nil,
 			})
 		}
 
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: "failed to inquiry last balance on current account",
 			Data:    nil,
 		})
 	}
 
-	return c.Status(code).JSON(Responses{
+	return c.Status(code).JSON(entity.Responses{
 		Success: true,
 		Message: "balance successfully fetched",
 		Data:    account,
@@ -59,7 +60,7 @@ func (b *BalanceHandler) TopupBalance(c *fiber.Ctx) error {
 
 	// parse body payload
 	if err := c.BodyParser(t); err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -67,9 +68,9 @@ func (b *BalanceHandler) TopupBalance(c *fiber.Ctx) error {
 	}
 
 	// validate request
-	m, err := tools.ValidateRequest(t)
+	m, err := validator.ValidateRequest(t)
 	if err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data: map[string]interface{}{
@@ -80,7 +81,7 @@ func (b *BalanceHandler) TopupBalance(c *fiber.Ctx) error {
 
 	// 1. check used exRefNumber
 	if repository.Topup.IsUsedExRefNumber(t.ExRefNumber) {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: "exRefNumber already used",
 			Data:    t,
@@ -90,7 +91,7 @@ func (b *BalanceHandler) TopupBalance(c *fiber.Ctx) error {
 	// 2. inquiry balance
 	code, balance, err := repository.Balance.Inquiry(t.UniqueID)
 	if err != nil {
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -111,7 +112,7 @@ func (b *BalanceHandler) TopupBalance(c *fiber.Ctx) error {
 	// 5. insert topup document
 	code, err = repository.Topup.CreateTopupDocument(t)
 	if err != nil {
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -121,7 +122,7 @@ func (b *BalanceHandler) TopupBalance(c *fiber.Ctx) error {
 	// 6. do update document on AccountRepository Collection
 	code, err = repository.Balance.UpdateBalance(t.UniqueID, t.LastBalanceEncrypted)
 	if err != nil {
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -136,7 +137,7 @@ func (b *BalanceHandler) TopupBalance(c *fiber.Ctx) error {
 
 	_ = kafka.ProduceMsg(kafka.TopUpTopic, payload)
 
-	return c.Status(code).JSON(Responses{
+	return c.Status(code).JSON(entity.Responses{
 		Success: true,
 		Message: "account balance has been top-up successfully",
 		Data:    t,
@@ -149,7 +150,7 @@ func (b *BalanceHandler) DeductBalance(c *fiber.Ctx) error {
 
 	// parse body payload
 	if err := c.BodyParser(d); err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -157,9 +158,9 @@ func (b *BalanceHandler) DeductBalance(c *fiber.Ctx) error {
 	}
 
 	// validate request
-	m, err := tools.ValidateRequest(d)
+	m, err := validator.ValidateRequest(d)
 	if err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data: map[string]interface{}{
@@ -172,14 +173,14 @@ func (b *BalanceHandler) DeductBalance(c *fiber.Ctx) error {
 	code, balance, err := repository.Balance.Inquiry(d.UniqueID)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return c.Status(code).JSON(Responses{
+			return c.Status(code).JSON(entity.Responses{
 				Success: false,
 				Message: "balance not found or it has been unregistered",
 				Data:    nil,
 			})
 		}
 
-		return c.Status(500).JSON(Responses{
+		return c.Status(500).JSON(entity.Responses{
 			Success: false,
 			Message: "failed to inquiry last balance on current account",
 			Data:    nil,
@@ -191,7 +192,7 @@ func (b *BalanceHandler) DeductBalance(c *fiber.Ctx) error {
 
 	// 2. Jika saldo cukup, maka lanjutkan proses pengurangan saldo (pembayaran)
 	if balance.CurrentBalance < int64(d.Amount) {
-		return c.Status(500).JSON(Responses{
+		return c.Status(500).JSON(entity.Responses{
 			Success: false,
 			Message: "current balance is less than current transaction amount",
 			Data:    &b,
@@ -207,7 +208,7 @@ func (b *BalanceHandler) DeductBalance(c *fiber.Ctx) error {
 	// 4. Update document
 	code, err = repository.Balance.UpdateBalance(d.UniqueID, d.LastBalanceEncrypted)
 	if err != nil {
-		return c.Status(code).JSON(Responses{
+		return c.Status(code).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -231,7 +232,7 @@ func (b *BalanceHandler) DeductBalance(c *fiber.Ctx) error {
 
 	_ = kafka.ProduceMsg(kafka.DeductTopic, payload)
 
-	return c.Status(200).JSON(Responses{
+	return c.Status(200).JSON(entity.Responses{
 		Success: true,
 		Message: "balance has been successfully deducted",
 		Data:    d,
