@@ -16,23 +16,6 @@ import (
 type AccountRepository struct {
 }
 
-//func (a *AccountRepository) getDefaultFilter(account *entity.AccountBalance) bson.D {
-//	filter := bson.D{
-//		{"merchantId", account.MerchantID},
-//		{"partnerId", account.PartnerID},
-//	}
-//
-//	if account.TerminalID != "" {
-//		filter = append(filter, bson.D{{"terminalId", account.TerminalID}}...)
-//	}
-//
-//	if account.Type > 0 {
-//		filter = append(filter, bson.D{{"type", account.Type}}...)
-//	}
-//
-//	return filter
-//}
-
 func (a *AccountRepository) findByFilter(filter interface{}) (interface{}, error) {
 	account := new(entity.AccountBalance)
 
@@ -46,47 +29,6 @@ func (a *AccountRepository) findByFilter(filter interface{}) (interface{}, error
 }
 
 /*
-FindAll
-function args:
-
-	queryParams: string
-
-return:
-
-	code: int,
-	accounts: interface{},
-	length: int,
-	err: error
-*/
-func (a *AccountRepository) FindAll(queryParams string) (int, interface{}, int, error) {
-	filter := bson.D{}
-
-	if queryParams != "" {
-		filter = bson.D{{"active", false}}
-		if queryParams == "true" {
-			filter = bson.D{{"active", true}}
-		}
-	}
-
-	ctx, cancel := context.WithTimeout(context.TODO(), 500*time.Millisecond)
-	defer cancel()
-
-	cursor, err := db.Mongo.Collection.Account.Find(ctx, filter,
-		options.Find().SetProjection(bson.D{{"secretKey", 0}, {"lastBalance", 0}}),
-	)
-	if err != nil {
-		return fiber.StatusInternalServerError, nil, 0, err
-	}
-
-	var accounts []entity.AccountBalance
-	if err = cursor.All(context.TODO(), &accounts); err != nil {
-		return fiber.StatusInternalServerError, nil, 0, err
-	}
-
-	return fiber.StatusOK, &accounts, len(accounts), nil
-}
-
-/*
 FindAllPaginated
 function args:
 
@@ -94,11 +36,11 @@ function args:
 
 return:
 
-	code int,
-	data interfaces{},
-	totalDocument int64,
-	totalPages int,
-	err error
+	HttpStatusCode 	int,
+	Data 			interfaces{},
+	TotalDocument 	int64,
+	TotalPages 		int,
+	err 			error
 */
 func (a *AccountRepository) FindAllPaginated(request *entity.PaginatedAccountRequest) (int, interface{}, int64, int64, error) {
 	var filter interface{}
