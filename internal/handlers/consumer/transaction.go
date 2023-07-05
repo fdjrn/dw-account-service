@@ -40,6 +40,10 @@ func (t *TransactionHandler) DoHandleTopupTransaction(message *sarama.ConsumerMe
 	t.accountRepository.Entity.MerchantID = data.MerchantID
 	t.accountRepository.Entity.TerminalID = data.TerminalID
 
+	if data.TerminalID == "" {
+		t.accountRepository.Entity.Type = repository.AccountTypeMerchant
+	}
+
 	account, err := t.accountRepository.FindOne()
 	if err != nil {
 		// invalid account infos
