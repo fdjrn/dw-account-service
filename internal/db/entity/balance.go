@@ -1,5 +1,14 @@
 package entity
 
+type InquiryBalance struct {
+	PartnerID      string `json:"partnerId" bson:"partnerId"`
+	MerchantID     string `json:"merchantId" bson:"merchantId"`
+	TerminalID     string `json:"terminalId,omitempty" bson:"terminalId"`
+	TerminalName   string `json:"terminalName,omitempty" bson:"terminalName"`
+	Type           int    `json:"-" bson:"-"`
+	CurrentBalance int64  `json:"currentBalance,omitempty" bson:"lastBalanceNumeric"`
+}
+
 // BalanceInquiry
 // adalah struct yang digunakan untuk proses pengecekan saldo akhir pengguna
 type BalanceInquiry struct {
@@ -129,4 +138,27 @@ type BalanceDeduction struct {
 
 	// Nilai saldo akhir yang di encrypt
 	LastBalanceEncrypted string `json:"-"`
+}
+
+type BalanceTrxItem struct {
+	ID          string `json:"id" bson:"id"`
+	Description string `json:"description" bson:"description"`
+	ItemPrice   int64  `json:"itemPrice" bson:"itemPrice"`
+	Qty         int    `json:"qty" bson:"qty"`
+}
+
+type BalanceTrx struct {
+	// PartnerTransDate adalah tgl transaksi yang dikirim oleh client/partner
+	// format: YYYYMMDDhhmmss
+	PartnerTransDate string `json:"partnerTransDate" bson:"partnerTransDate"`
+	PartnerRefNumber string `json:"partnerRefNumber" bson:"partnerRefNumber"`
+	PartnerID        string `json:"partnerId" bson:"partnerId"`
+	MerchantID       string `json:"merchantId" bson:"merchantId"`
+	TerminalID       string `json:"terminalId,omitempty" bson:"terminalId"`
+	TerminalName     string `json:"terminalName,omitempty" bson:"terminalName"`
+	TotalAmount      int64  `json:"totalAmount" bson:"totalAmount"`
+	Status           string `json:"status,omitempty" bson:"status"`
+	//RefNumber        string         `json:"refNumber,omitempty" bson:"refNumber"`
+	ReceiptNumber string         `json:"receiptNumber,omitempty" bson:"receiptNumber"`
+	Items         BalanceTrxItem `json:"items" bson:"items"`
 }

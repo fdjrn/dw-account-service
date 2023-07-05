@@ -5,8 +5,9 @@ import (
 	"github.com/dw-account-service/internal/db/entity"
 	"github.com/dw-account-service/internal/db/repository"
 	"github.com/dw-account-service/internal/handlers/validator"
-	"github.com/dw-account-service/pkg/tools"
-	"github.com/dw-account-service/pkg/xlogger"
+	"github.com/dw-account-service/internal/utilities"
+	"github.com/dw-account-service/internal/utilities/crypt"
+	"github.com/dw-account-service/internal/utilities/str"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/mongo"
 	"strconv"
@@ -19,14 +20,14 @@ type MerchantHandler struct {
 
 // isExists
 func (m *MerchantHandler) isExists(account *entity.AccountBalance) bool {
-	_, err := repository.Account.FindOne(account)
+	_, err := repository.Account.FindOne()
 	if err != nil {
 		// no document found, its mean it can be registered
 		if err == mongo.ErrNoDocuments {
 			return false
 		}
 
-		xlogger.Log.Println(err.Error())
+		utilities.Log.Println(err.Error())
 		return true
 	}
 	return true
@@ -54,7 +55,7 @@ func (m *MerchantHandler) Register(c *fiber.Ctx) error {
 		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: "merchantId already exists, or its probably in deactivated status. ",
-			Data:    fiber.Map{"merchantId": payload.MerchantID},
+			Data:    fiber.Map{"merchantId": payload.MerchantID, "partnerId": payload.PartnerID},
 		})
 	}
 
@@ -71,8 +72,8 @@ func (m *MerchantHandler) Register(c *fiber.Ctx) error {
 	}
 
 	// set default value for accountBalance document
-	key, _ := tools.GenerateSecretKey()
-	encryptedBalance, _ := tools.Encrypt([]byte(key), fmt.Sprintf("%016s", "0"))
+	key, _ := crypt.GenerateSecretKey()
+	encryptedBalance, _ := crypt.Encrypt([]byte(key), fmt.Sprintf("%016s", "0"))
 
 	payload.SecretKey = key
 	payload.Active = true
@@ -82,9 +83,9 @@ func (m *MerchantHandler) Register(c *fiber.Ctx) error {
 	payload.CreatedAt = time.Now().UnixMilli()
 	payload.UpdatedAt = payload.CreatedAt
 
-	code, id, err := repository.Account.InsertDocument(payload)
+	id, err := repository.Account.Create(payload)
 	if err != nil {
-		return c.Status(code).JSON(entity.Responses{
+		return c.Status(500).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -243,82 +244,7 @@ func (m *MerchantHandler) GetMerchantDetail(c *fiber.Ctx) error {
 
 }
 
-func (m *MerchantHandler) GetMerchantMembers(c *fiber.Ctx) error {
-	// new account struct
-	payload := new(entity.PaginatedAccountRequest)
-	// parse body payload
-	if err := c.BodyParser(&payload); err != nil {
-		return c.Status(400).JSON(entity.Responses{
-			Success: false,
-			Message: err.Error(),
-			Data:    nil,
-		})
-	}
 
-	// validate request
-	if payload.PartnerID == "" {
-		return c.Status(400).JSON(entity.ResponsePayloadPaginated{
-			Success: false,
-			Message: "partnerId cannot be empty",
-			Data:    entity.ResponsePayloadDataPaginated{},
-		})
-	}
-
-	if payload.MerchantID == "" {
-		return c.Status(400).JSON(entity.ResponsePayloadPaginated{
-			Success: false,
-			Message: "merchantId cannot be empty",
-			Data:    entity.ResponsePayloadDataPaginated{},
-		})
-	}
-
-	// set default value
-	if payload.Page == 0 {
-		payload.Page = 1
-	}
-
-	if payload.Size == 0 {
-		payload.Size = 10
-	}
-
-	payload.Type = repository.AccountTypeRegular
-	//payload.Status = repository.AccountStatusActive
-
-	code, merchants, total, pages, err := repository.Account.FindMemberByMerchantPaginated(payload)
-
-	if err != nil {
-		errMsg := err.Error()
-		if err == mongo.ErrNoDocuments {
-			errMsg = "merchants not found or its already been deactivated"
-		}
-		return c.Status(500).JSON(entity.Responses{
-			Success: false,
-			Message: errMsg,
-			Data:    nil,
-		})
-	}
-
-	if err != nil {
-		return c.Status(code).JSON(entity.ResponsePayloadPaginated{
-			Success: false,
-			Message: err.Error(),
-			Data:    entity.ResponsePayloadDataPaginated{},
-		})
-	}
-
-	return c.Status(code).JSON(entity.ResponsePayloadPaginated{
-		Success: true,
-		Message: "members successfully fetched",
-		Data: entity.ResponsePayloadDataPaginated{
-			Result:      merchants,
-			Total:       total,
-			PerPage:     payload.Size,
-			CurrentPage: payload.Page,
-			LastPage:    pages,
-		},
-	})
-
-}
 
 // -------------------------- Transactions ------------------------------
 
@@ -384,15 +310,15 @@ func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
 	tBalance.PartnerRefNumber = payload.PartnerRefNumber
 	tBalance.PartnerTransDate = payload.PartnerTransDate
 	tBalance.TransDate = time.Now().UnixMilli()
-	tBalance.TransNumber = tools.GenerateTransNumber()
-	tBalance.ReceiptNumber = tools.GenerateReceiptNumber(tools.TransTopUp, "")
+	tBalance.TransNumber = str.GenerateTransNumber()
+	tBalance.ReceiptNumber = str.GenerateReceiptNumber(utilities.TransTopUp, "")
 
 	// 4. encrypt result addition
 	tBalance.LastBalance = balance.CurrentBalance + int64(payload.Amount)
 	strLastBalance := strconv.FormatInt(tBalance.LastBalance, 10)
-	tBalance.LastBalanceEncrypted, _ = tools.Encrypt([]byte(balance.SecretKey), fmt.Sprintf("%016s", strLastBalance))
+	tBalance.LastBalanceEncrypted, _ = crypt.Encrypt([]byte(balance.SecretKey), fmt.Sprintf("%016s", strLastBalance))
 
-	tBalance.Status = repository.TransSuccessStatus
+	tBalance.Status = repository.TrxStatusSuccess
 	tBalance.CreatedAt = tBalance.TransDate
 	tBalance.UpdatedAt = tBalance.TransDate
 

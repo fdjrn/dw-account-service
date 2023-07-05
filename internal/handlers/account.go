@@ -7,8 +7,8 @@ import (
 	"github.com/dw-account-service/internal/db/entity"
 	"github.com/dw-account-service/internal/db/repository"
 	"github.com/dw-account-service/internal/handlers/validator"
-	"github.com/dw-account-service/pkg/tools"
-	"github.com/dw-account-service/pkg/xlogger"
+	"github.com/dw-account-service/internal/utilities"
+	"github.com/dw-account-service/internal/utilities/crypt"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -18,17 +18,22 @@ import (
 )
 
 type AccountHandler struct {
+	repo repository.AccountRepository
 }
 
-func (a *AccountHandler) isExists(account *entity.AccountBalance) bool {
-	_, err := repository.Account.FindOne(account)
+func NewAccountHandler() AccountHandler {
+	return AccountHandler{repo: repository.NewAccountRepository()}
+}
+
+func (a *AccountHandler) isExists() bool {
+	_, err := a.repo.FindOne()
 	if err != nil {
 		// no document found, its mean it can be registered
 		if err == mongo.ErrNoDocuments {
 			return false
 		}
 
-		xlogger.Log.Println(err.Error())
+		utilities.Log.Println(err.Error())
 		return true
 	}
 	return true
@@ -41,15 +46,13 @@ func (a *AccountHandler) Register(c *fiber.Ctx) error {
 	payload := new(entity.AccountBalance)
 
 	// parse body payload
-	if err = c.BodyParser(&payload); err != nil {
+	if err = c.BodyParser(payload); err != nil {
 		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
 		})
 	}
-
-	payload.Type = repository.AccountTypeRegular
 
 	// validate request
 	validation, err := validator.ValidateRequest(payload)
@@ -63,44 +66,53 @@ func (a *AccountHandler) Register(c *fiber.Ctx) error {
 		})
 	}
 
-	if a.isExists(payload) {
-		return c.Status(400).JSON(entity.Responses{
-			Success: false,
-			Message: "account already exists, or its probably in deactivated status. ",
-			Data: map[string]interface{}{
-				"partnerId":  payload.PartnerID,
-				"merchantId": payload.MerchantID,
-				"terminalId": payload.TerminalID,
-			},
-		})
-	}
-
 	// set default value for accountBalance document
-	key, _ := tools.GenerateSecretKey()
-	encryptedBalance, _ := tools.Encrypt([]byte(key), fmt.Sprintf("%016s", "0"))
+	key, _ := crypt.GenerateSecretKey()
+	encryptedBalance, _ := crypt.Encrypt([]byte(key), fmt.Sprintf("%016s", "0"))
 
 	payload.SecretKey = key
 	payload.Active = true
+	payload.UniqueID = fmt.Sprintf("%s%s", payload.MerchantID, payload.TerminalID)
+	if payload.Type == repository.AccountTypeMerchant {
+		payload.UniqueID = ""
+		payload.TerminalID = ""
+		payload.TerminalName = ""
+	}
 
 	payload.LastBalance = encryptedBalance
 	payload.LastBalanceNumeric = 0
 	payload.CreatedAt = time.Now().UnixMilli()
 	payload.UpdatedAt = payload.CreatedAt
 
-	code, insertedId, err := repository.Account.InsertDocument(payload)
+	a.repo.Entity = payload
+	if a.isExists() {
+		responseData := map[string]interface{}{"partnerId": payload.PartnerID, "merchantId": payload.MerchantID}
+
+		if payload.Type == repository.AccountTypeRegular {
+			responseData["terminalId"] = payload.TerminalID
+		}
+
+		return c.Status(400).JSON(entity.Responses{
+			Success: false,
+			Message: "account already exists, or its probably in deactivated status. ",
+			Data:    responseData,
+		})
+	}
+
+	insertedId, err := a.repo.Create()
 	if err != nil {
-		return c.Status(code).JSON(entity.Responses{
+		return c.Status(500).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
 		})
 	}
 
-	_, createdAccount, _ := repository.Account.FindByID(insertedId, true)
+	createdAccount, _ := a.repo.FindByID(insertedId)
 
-	return c.Status(code).JSON(entity.Responses{
+	return c.Status(201).JSON(entity.Responses{
 		Success: true,
-		Message: "account successfully registered",
+		Message: "registration successful",
 		Data:    createdAccount,
 	})
 }
@@ -108,10 +120,10 @@ func (a *AccountHandler) Register(c *fiber.Ctx) error {
 func (a *AccountHandler) Unregister(c *fiber.Ctx) error {
 
 	// new UnregisterAccount struct
-	uac := new(entity.UnregisterAccount)
+	payload := new(entity.UnregisterAccount)
 
 	// parse body payload
-	if err := c.BodyParser(uac); err != nil {
+	if err := c.BodyParser(payload); err != nil {
 		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
@@ -119,9 +131,22 @@ func (a *AccountHandler) Unregister(c *fiber.Ctx) error {
 		})
 	}
 
-	code, err := repository.Account.DeactivateAccount(uac)
+	// check is valid account
+	a.repo.Entity.PartnerID = payload.PartnerID
+	a.repo.Entity.MerchantID = payload.MerchantID
+	a.repo.Entity.TerminalID = payload.TerminalID
+
+	if !a.isExists() {
+		return c.Status(400).JSON(entity.Responses{
+			Success: false,
+			Message: "account not found",
+			Data:    nil,
+		})
+	}
+
+	err := a.repo.DeactivateAccount(payload)
 	if err != nil {
-		return c.Status(code).JSON(entity.Responses{
+		return c.Status(500).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -130,26 +155,98 @@ func (a *AccountHandler) Unregister(c *fiber.Ctx) error {
 
 	// insert into accountDeactivated collection
 	auditLog := time.Now().Format("2006-01-02 15:04:05")
-	uac.Type = repository.AccountTypeRegular
-	uac.CreatedAt = auditLog
-	uac.UpdatedAt = auditLog
-	code, _, err = repository.Account.InsertDeactivatedAccount(uac)
+	payload.CreatedAt = auditLog
+	payload.UpdatedAt = auditLog
 
-	updAccount := new(entity.AccountBalance)
-	updAccount.PartnerID = uac.PartnerID
-	updAccount.MerchantID = uac.MerchantID
-	updAccount.TerminalID = uac.TerminalID
+	//var acc entity.AccountBalance
+	doc, _ := a.repo.FindOne()
+	payload.Type = doc.Type
+	payload.UniqueID = doc.UniqueID
 
-	result, _ := repository.Account.FindOne(updAccount)
+	_, err = a.repo.InsertDeactivatedAccount(payload)
 
-	return c.Status(code).JSON(entity.Responses{
+	return c.Status(200).JSON(entity.Responses{
 		Success: true,
-		Message: "account successfully unregistered",
-		Data:    result,
+		Message: "deactivation successful",
+		Data:    doc,
 	})
 }
 
-func (a *AccountHandler) GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
+func (a *AccountHandler) GetAccountByID(c *fiber.Ctx) error {
+	id, _ := primitive.ObjectIDFromHex(c.Params("id"))
+	account, err := a.repo.FindByID(id)
+
+	if err != nil {
+		errMsg := err.Error()
+		if err == mongo.ErrNoDocuments {
+			errMsg = "account not found or its already been unregistered"
+		}
+		return c.Status(500).JSON(entity.Responses{
+			Success: false,
+			Message: errMsg,
+			Data:    nil,
+		})
+	}
+
+	return c.Status(200).JSON(entity.Responses{
+		Success: true,
+		Message: "account fetched successfully ",
+		Data:    account,
+	})
+
+}
+
+func (a *AccountHandler) GetAccount(c *fiber.Ctx) error {
+
+	// new account struct
+	payload := new(entity.AccountBalance)
+
+	// parse body payload
+	if err := c.BodyParser(&payload); err != nil {
+		return c.Status(400).JSON(entity.Responses{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	// validate request
+	validation, err := validator.ValidateRequest(payload)
+	if err != nil {
+		return c.Status(400).JSON(entity.Responses{
+			Success: false,
+			Message: err.Error(),
+			Data: map[string]interface{}{
+				"errors": validation,
+			},
+		})
+	}
+
+	a.repo.Entity = payload
+	account, err := a.repo.FindOne()
+
+	if err != nil {
+		errMsg := err.Error()
+		if err == mongo.ErrNoDocuments {
+			errMsg = "account not found or its already been unregistered"
+		}
+
+		return c.Status(500).JSON(entity.Responses{
+			Success: false,
+			Message: errMsg,
+			Data:    nil,
+		})
+	}
+
+	return c.Status(200).JSON(entity.Responses{
+		Success: true,
+		Message: "account fetched successfully ",
+		Data:    account,
+	})
+
+}
+
+func (a *AccountHandler) GetAccountsPaginated(c *fiber.Ctx) error {
 
 	var req = new(entity.PaginatedAccountRequest)
 
@@ -177,7 +274,7 @@ func (a *AccountHandler) GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
 		msgResponse = fmt.Sprintf("%s account successfully fetched", req.Status)
 	}
 
-	// set default value
+	// set default param value
 	if req.Page == 0 {
 		req.Page = 1
 	}
@@ -186,16 +283,16 @@ func (a *AccountHandler) GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
 		req.Size = 10
 	}
 
-	code, accounts, total, pages, err := repository.Account.FindAllPaginated(req)
+	accounts, total, pages, err := repository.Account.FindAllPaginated(req)
 	if err != nil {
-		return c.Status(code).JSON(entity.ResponsePayloadPaginated{
+		return c.Status(500).JSON(entity.ResponsePayloadPaginated{
 			Success: false,
 			Message: err.Error(),
 			Data:    entity.ResponsePayloadDataPaginated{},
 		})
 	}
 
-	return c.Status(code).JSON(entity.ResponsePayloadPaginated{
+	return c.Status(200).JSON(entity.ResponsePayloadPaginated{
 		Success: true,
 		Message: msgResponse,
 		Data: entity.ResponsePayloadDataPaginated{
@@ -208,59 +305,11 @@ func (a *AccountHandler) GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
 	})
 }
 
-func (a *AccountHandler) GetActiveAccountByID(c *fiber.Ctx) error {
-	id, _ := primitive.ObjectIDFromHex(c.Params("id"))
-	code, account, err := repository.Account.FindByID(id, true)
+// ----------------- Merchants -----------------
 
-	if err != nil {
-		errMsg := err.Error()
-		if err == mongo.ErrNoDocuments {
-			errMsg = "account not found or its already been unregistered"
-		}
-		return c.Status(code).JSON(entity.Responses{
-			Success: false,
-			Message: errMsg,
-			Data:    nil,
-		})
-	}
-
-	return c.Status(code).JSON(entity.Responses{
-		Success: true,
-		Message: "account fetched successfully ",
-		Data:    account,
-	})
-
-}
-
-func (a *AccountHandler) GetActiveAccountByUniqueID(c *fiber.Ctx) error {
-	code, account, err := repository.Account.FindByActiveStatus(c.Params("uid"), true)
-
-	if err != nil {
-		errMsg := err.Error()
-		if err == mongo.ErrNoDocuments {
-			errMsg = "account not found or its already been unregistered"
-		}
-
-		return c.Status(code).JSON(entity.Responses{
-			Success: false,
-			Message: errMsg,
-			Data:    nil,
-		})
-	}
-
-	return c.Status(code).JSON(entity.Responses{
-		Success: true,
-		Message: "account fetched successfully ",
-		Data:    account,
-	})
-
-}
-
-func (a *AccountHandler) GetAccountDetail(c *fiber.Ctx) error {
-
+func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx) error {
 	// new account struct
-	payload := new(entity.AccountBalance)
-
+	payload := new(entity.PaginatedAccountRequest)
 	// parse body payload
 	if err := c.BodyParser(&payload); err != nil {
 		return c.Status(400).JSON(entity.Responses{
@@ -270,37 +319,58 @@ func (a *AccountHandler) GetAccountDetail(c *fiber.Ctx) error {
 		})
 	}
 
+	// set type for payload validation
+	payload.Type = repository.AccountTypeMerchant
+
 	// validate request
-	validation, err := validator.ValidateAccountDetailRequest(payload)
+	if payload.PartnerID == "" {
+		return c.Status(400).JSON(entity.ResponsePayloadPaginated{
+			Success: false,
+			Message: "partnerId cannot be empty",
+			Data:    entity.ResponsePayloadDataPaginated{},
+		})
+	}
+
+	if payload.MerchantID == "" {
+		return c.Status(400).JSON(entity.ResponsePayloadPaginated{
+			Success: false,
+			Message: "merchantId cannot be empty",
+			Data:    entity.ResponsePayloadDataPaginated{},
+		})
+	}
+
+	// set default value
+	if payload.Page == 0 {
+		payload.Page = 1
+	}
+
+	if payload.Size == 0 {
+		payload.Size = 10
+	}
+
+	// re-apply type for filter condition
+	payload.Type = repository.AccountTypeRegular
+
+	members, total, pages, err := a.repo.FindMembersPaginated(payload)
+
 	if err != nil {
-		return c.Status(400).JSON(entity.Responses{
+		return c.Status(500).JSON(entity.ResponsePayloadPaginated{
 			Success: false,
 			Message: err.Error(),
-			Data: map[string]interface{}{
-				"errors": validation,
-			},
+			Data:    entity.ResponsePayloadDataPaginated{},
 		})
 	}
 
-	account, err := repository.Account.FindOne(payload)
-
-	if err != nil {
-		errMsg := err.Error()
-		if err == mongo.ErrNoDocuments {
-			errMsg = "account not found or its already been unregistered"
-		}
-
-		return c.Status(500).JSON(entity.Responses{
-			Success: false,
-			Message: errMsg,
-			Data:    nil,
-		})
-	}
-
-	return c.Status(200).JSON(entity.Responses{
+	return c.Status(200).JSON(entity.ResponsePayloadPaginated{
 		Success: true,
-		Message: "account fetched successfully ",
-		Data:    account,
+		Message: "members successfully fetched",
+		Data: entity.ResponsePayloadDataPaginated{
+			Result:      members,
+			Total:       total,
+			PerPage:     payload.Size,
+			CurrentPage: payload.Page,
+			LastPage:    pages,
+		},
 	})
 
 }
@@ -358,7 +428,7 @@ func (a *AccountHandler) UpdateMerchantAndTerminalForAccount(c *fiber.Ctx) error
 				}},
 			})
 		if err2 != nil {
-			xlogger.Log.Println("err: ", err2.Error())
+			utilities.Log.Println("err: ", err2.Error())
 		}
 
 		//arrAccount = append(arrAccount, account)
@@ -414,7 +484,7 @@ func (a *AccountHandler) SyncBalance(c *fiber.Ctx) error {
 	//var arrAccount []entity.AccountBalance
 	var successCount int64
 	for _, account := range accounts {
-		currentBalance, _ := tools.DecryptAndConvert([]byte(account.SecretKey), account.LastBalance)
+		currentBalance, _ := crypt.DecryptAndConvert([]byte(account.SecretKey), account.LastBalance)
 
 		//str := strings.Split(account.UniqueID, "_")
 		//account.TerminalID = str[0]
@@ -428,7 +498,7 @@ func (a *AccountHandler) SyncBalance(c *fiber.Ctx) error {
 				}},
 			})
 		if err2 != nil {
-			xlogger.Log.Println("err: ", err2.Error())
+			utilities.Log.Println("err: ", err2.Error())
 		}
 
 		//	arrAccount = append(arrAccount, account)

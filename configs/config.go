@@ -1,7 +1,7 @@
 package configs
 
 import (
-	"github.com/dw-account-service/pkg/xlogger"
+	"github.com/dw-account-service/internal/utilities"
 	"github.com/spf13/viper"
 	"log"
 	"strings"
@@ -37,6 +37,14 @@ type KafkaProducerConfig struct {
 	RetryMax   int  `mapstructure:"retryMax"`
 }
 
+type KafkaConsumerConfig struct {
+	Assignor          string `mapstructure:"assignor"`
+	Oldest            bool   `mapstructure:"oldest"`
+	Verbose           int    `mapstructure:"verbose"`
+	ConsumerGroupName string `mapstructure:"consumerGroupName"`
+	ConsumerTopics    string `mapstructure:"topics"`
+}
+
 type KafkaConfig struct {
 	// mode: producer|consumer|both
 	Mode string `mapstructure:"mode"`
@@ -45,6 +53,7 @@ type KafkaConfig struct {
 	SASL     KafkaSASLConfig     `mapstructure:"sasl"`
 	TLS      KafkaTlsConfig      `mapstructure:"tls"`
 	Producer KafkaProducerConfig `mapstructure:"producer"`
+	Consumer KafkaConsumerConfig `mapstructure:"consumer"`
 }
 
 type AppConfig struct {
@@ -76,7 +85,7 @@ func Initialize() error {
 		return err
 	}
 
-	err = (&xlogger.AppLogger{
+	err = (&utilities.AppLogger{
 		LogPath:     MainConfig.LogPath,
 		CompressLog: true,
 		DailyRotate: true,
@@ -87,8 +96,8 @@ func Initialize() error {
 		return err
 	}
 
-	xlogger.Log.SetPrefix("[INIT-APP] ")
-	xlogger.Log.Println(strings.Repeat("-", 40))
-	xlogger.Log.Println("| configuration >> loaded")
+	utilities.Log.SetPrefix("[INIT-APP] ")
+	utilities.Log.Println(strings.Repeat("-", 40))
+	utilities.Log.Println("| configuration >> loaded")
 	return nil
 }

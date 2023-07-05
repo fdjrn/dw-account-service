@@ -17,10 +17,14 @@ const (
 
 	AccountStatusActive      = "active"
 	AccountStatusDeactivated = "deactivated"
+	AccountStatusAll         = "all"
 
-	TransSuccessStatus = "00-SUCCESS"
-	TransFailedStatus  = "01-FAILED"
-	TransPendingStatus = "02-PENDING"
+	TrxStatusSuccess        = "00"
+	TrxStatusPending        = "01"
+	TrxStatusPartialSuccess = "02"
+	TrxStatusInvalid        = "03"
+	TrxStatusDuplicate      = "04"
+	TrxStatusFailed         = "05"
 )
 
 func GetDefaultAccountFilter(account *entity.AccountBalance) bson.D {

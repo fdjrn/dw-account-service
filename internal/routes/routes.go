@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dw-account-service/configs"
-	"github.com/dw-account-service/pkg/xlogger"
+	"github.com/dw-account-service/internal/utilities"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"log"
@@ -16,9 +16,9 @@ func setupRoutes(app *fiber.App) {
 	api := app.Group("/api/v1")
 	initAccountRoutes(api)
 	initBalanceRoutes(api)
-	initMerchantRoutes(api)
+	//initMerchantRoutes(api)
 
-	xlogger.Log.Println("| routes >> initialized")
+	utilities.Log.Println("| routes >> initialized")
 }
 
 func getLogFile() *os.File {

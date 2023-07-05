@@ -5,20 +5,14 @@ import (
 	"fmt"
 	"github.com/Shopify/sarama"
 	"github.com/dw-account-service/configs"
-	"github.com/dw-account-service/pkg/tools"
-	"github.com/dw-account-service/pkg/xlogger"
+	"github.com/dw-account-service/internal/utilities"
+	"github.com/dw-account-service/internal/utilities/str"
+
+	//"github.com/dw-account-service/pkg/tools"
 	"strings"
 )
 
-var (
-	DeductTopic = "mdw.transaction.deduct.created"
-	TopUpTopic  = "mdw.transaction.topup.created"
-)
-
-var (
-	Producer sarama.SyncProducer
-	//SaramaLogger = log.New(os.Stdout, "[PRODUCER] ", log.LstdFlags)
-)
+var Producer sarama.SyncProducer
 
 func initProducer() error {
 	splitBrokers := strings.Split(configs.MainConfig.Kafka.Brokers, ",")
@@ -36,7 +30,7 @@ func initProducer() error {
 	}
 
 	Producer = syncProducer
-	xlogger.Log.Println("| kafka client (producer) >> created")
+	utilities.Log.Println("| producer >> created")
 
 	return nil
 }
@@ -55,17 +49,17 @@ func Initialize() error {
 }
 
 func ProduceMsg(topic string, payload []byte) error {
-	xlogger.Log.SetPrefix("[PRODUCER] ")
+	utilities.Log.SetPrefix("[PRODUCER] ")
 	partition, offset, err := Producer.SendMessage(&sarama.ProducerMessage{
 		Topic: topic,
-		Key:   sarama.StringEncoder(tools.GetUnixTime()),
+		Key:   sarama.StringEncoder(str.GetUnixTime()),
 		Value: sarama.StringEncoder(payload),
 	})
 	if err != nil {
-		xlogger.Log.Println("| failed to send message to ", topic, err)
+		utilities.Log.Println("| failed to send message to ", topic, err)
 		return err
 	}
 
-	xlogger.Log.Printf("| message successfully wrote at partition: %d, offset: %d\n", partition, offset)
+	utilities.Log.Printf("| message successfully wrote at partition: %d, offset: %d\n", partition, offset)
 	return nil
 }
