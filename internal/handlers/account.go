@@ -314,12 +314,7 @@ func (a *AccountHandler) GetAccountsPaginated(c *fiber.Ctx) error {
 // ----------------- Merchants -----------------
 
 func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx, isPeriod bool) error {
-	var (
-		members interface{}
-		total   int64
-		pages   int64
-		err     error
-	)
+	var err error
 
 	// new account struct
 	payload := new(entity.PaginatedAccountRequest)
@@ -332,6 +327,28 @@ func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx, isPeriod bool) error {
 		})
 	}
 
+	// validate periods parameter
+	if isPeriod {
+		payload.Periods.StartDate, err = time.Parse("20060102", payload.Periods.Start)
+		if err != nil {
+			return c.Status(400).JSON(entity.PaginatedResponseMembers{
+				Success: false,
+				Message: "invalid start periods",
+				Data:    nil,
+			})
+		}
+
+		payload.Periods.EndDate, err = time.Parse("20060102", payload.Periods.End)
+		if err != nil {
+			return c.Status(400).JSON(entity.PaginatedResponseMembers{
+				Success: false,
+				Message: "invalid end periods",
+				Data:    nil,
+			})
+		}
+
+	}
+
 	// set type for payload validation
 	payload.Type = repository.AccountTypeMerchant
 
@@ -340,7 +357,7 @@ func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx, isPeriod bool) error {
 		return c.Status(400).JSON(entity.PaginatedResponseMembers{
 			Success: false,
 			Message: "partnerId cannot be empty",
-			Data:    entity.PaginatedResponseMemberDetails{},
+			Data:    nil,
 		})
 	}
 
@@ -348,7 +365,7 @@ func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx, isPeriod bool) error {
 		return c.Status(400).JSON(entity.PaginatedResponseMembers{
 			Success: false,
 			Message: "merchantId cannot be empty",
-			Data:    entity.PaginatedResponseMemberDetails{},
+			Data:    nil,
 		})
 	}
 
@@ -364,17 +381,13 @@ func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx, isPeriod bool) error {
 	// re-apply type for filter condition
 	payload.Type = repository.AccountTypeRegular
 
-	if isPeriod {
-		members, total, pages, err = a.repo.FindMemberPeriodPaginated(payload)
-	} else {
-		members, total, pages, err = a.repo.FindMembersPaginated(payload)
-	}
+	members, total, pages, err := a.repo.FindMembers(payload, isPeriod)
 
 	if err != nil {
 		return c.Status(500).JSON(entity.PaginatedResponseMembers{
 			Success: false,
 			Message: err.Error(),
-			Data:    entity.PaginatedResponseMemberDetails{},
+			Data:    nil,
 		})
 	}
 
@@ -389,10 +402,10 @@ func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx, isPeriod bool) error {
 	return c.Status(200).JSON(entity.PaginatedResponseMembers{
 		Success: true,
 		Message: "members successfully fetched",
-		Data: entity.PaginatedResponseMemberDetails{
-			Total:          total,
-			CurrentBalance: a.balanceRepo.Entity.CurrentBalance,
-			Result:         members,
+		Data: &entity.PaginatedResponseMemberDetails{
+			Total:       total,
+			LastBalance: a.balanceRepo.Entity.CurrentBalance,
+			Result:      members,
 			Pagination: entity.PaginationInfo{
 				PerPage:     payload.Size,
 				CurrentPage: payload.Page,

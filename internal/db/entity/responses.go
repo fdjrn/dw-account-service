@@ -43,14 +43,14 @@ type PaginatedResponse struct {
 }
 
 type PaginatedResponseMemberDetails struct {
-	CurrentBalance int64          `json:"currentBalance"`
-	Total          int64          `json:"totalMember,omitempty"`
-	Result         interface{}    `json:"results,omitempty"`
-	Pagination     PaginationInfo `json:"pagination,omitempty"`
+	LastBalance int64          `json:"lastBalance"`
+	Total       int64          `json:"totalMember,omitempty"`
+	Result      interface{}    `json:"results,omitempty"`
+	Pagination  PaginationInfo `json:"pagination,omitempty"`
 }
 
 type PaginatedResponseMembers struct {
-	Success bool                           `json:"success"`
-	Message string                         `json:"message"`
-	Data    PaginatedResponseMemberDetails `json:"data,omitempty"`
+	Success bool                            `json:"success"`
+	Message string                          `json:"message"`
+	Data    *PaginatedResponseMemberDetails `json:"data,omitempty"`
 }

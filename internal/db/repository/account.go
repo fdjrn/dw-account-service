@@ -169,7 +169,7 @@ func (a *AccountRepository) RemoveDeactivatedAccount(acc *entity.UnregisterAccou
 
 // ----------------- MERCHANTS ----------------
 
-func (a *AccountRepository) FindMembersPaginated(request *entity.PaginatedAccountRequest) (interface{}, int64, int64, error) {
+func (a *AccountRepository) FindMembers(request *entity.PaginatedAccountRequest, isPeriod bool) (interface{}, int64, int64, error) {
 	filter := bson.D{}
 	switch request.Status {
 	case AccountStatusActive:
@@ -184,6 +184,16 @@ func (a *AccountRepository) FindMembersPaginated(request *entity.PaginatedAccoun
 		{"merchantId", request.MerchantID},
 		{"type", request.Type},
 	}...)
+
+	if isPeriod {
+		filter = append(filter,
+			bson.D{
+				{"createdAt", bson.D{
+					{"$gte", request.Periods.StartDate.UnixMilli()},
+					{"$lte", request.Periods.EndDate.UnixMilli()},
+				}},
+			}...)
+	}
 
 	skipValue := (request.Page - 1) * request.Size
 

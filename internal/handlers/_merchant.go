@@ -185,17 +185,17 @@ func (m *MerchantHandler) GetMerchants(c *fiber.Ctx) error {
 
 	code, merchants, total, pages, err := repository.Account.FindAllMerchant(req)
 	if err != nil {
-		return c.Status(code).JSON(entity.ResponsePayloadPaginated{
+		return c.Status(code).JSON(entity.PaginatedResponse{
 			Success: false,
 			Message: err.Error(),
-			Data:    entity.ResponsePayloadDataPaginated{},
+			Data:    entity.PaginatedDetailResponse{},
 		})
 	}
 
-	return c.Status(code).JSON(entity.ResponsePayloadPaginated{
+	return c.Status(code).JSON(entity.PaginatedResponse{
 		Success: true,
 		Message: msgResponse,
-		Data: entity.ResponsePayloadDataPaginated{
+		Data: entity.PaginatedDetailResponse{
 			Result:      merchants,
 			Total:       total,
 			PerPage:     req.Size,
@@ -243,8 +243,6 @@ func (m *MerchantHandler) GetMerchantDetail(c *fiber.Ctx) error {
 	})
 
 }
-
-
 
 // -------------------------- Transactions ------------------------------
 

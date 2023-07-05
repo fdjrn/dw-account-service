@@ -35,7 +35,11 @@ func initAccountRoutes(router fiber.Router) {
 	merchantRoutes := router.Group("/merchant")
 
 	merchantRoutes.Post("/members", func(c *fiber.Ctx) error {
-		return accountHandler.GetMerchantMembers(c)
+		return accountHandler.GetMerchantMembers(c, false)
+	})
+
+	merchantRoutes.Post("/members/period", func(c *fiber.Ctx) error {
+		return accountHandler.GetMerchantMembers(c, true)
 	})
 
 	// -------------------------- TOOLS --------------------------
