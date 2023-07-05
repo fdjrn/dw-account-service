@@ -24,16 +24,33 @@ type ResponsePayload struct {
 // paginated result section
 // -------------------------------------------
 
-type ResponsePayloadDataPaginated struct {
-	Result      interface{} `json:"results,omitempty"`
-	Total       int64       `json:"total,omitempty"`
-	PerPage     int64       `json:"perPage,omitempty"`
-	CurrentPage int64       `json:"currentPage,omitempty"`
-	LastPage    int64       `json:"lastPage,omitempty"`
+type PaginationInfo struct {
+	PerPage     int64 `json:"perPage,omitempty"`
+	CurrentPage int64 `json:"currentPage,omitempty"`
+	LastPage    int64 `json:"lastPage,omitempty"`
 }
 
-type ResponsePayloadPaginated struct {
-	Success bool                         `json:"success"`
-	Message string                       `json:"message"`
-	Data    ResponsePayloadDataPaginated `json:"data,omitempty"`
+type PaginatedDetailResponse struct {
+	Total      int64          `json:"total,omitempty"`
+	Result     interface{}    `json:"results,omitempty"`
+	Pagination PaginationInfo `json:"pagination,omitempty"`
+}
+
+type PaginatedResponse struct {
+	Success bool                    `json:"success"`
+	Message string                  `json:"message"`
+	Data    PaginatedDetailResponse `json:"data,omitempty"`
+}
+
+type PaginatedResponseMemberDetails struct {
+	CurrentBalance int64          `json:"currentBalance"`
+	Total          int64          `json:"totalMember,omitempty"`
+	Result         interface{}    `json:"results,omitempty"`
+	Pagination     PaginationInfo `json:"pagination,omitempty"`
+}
+
+type PaginatedResponseMembers struct {
+	Success bool                           `json:"success"`
+	Message string                         `json:"message"`
+	Data    PaginatedResponseMemberDetails `json:"data,omitempty"`
 }

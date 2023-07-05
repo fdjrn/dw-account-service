@@ -18,11 +18,15 @@ import (
 )
 
 type AccountHandler struct {
-	repo repository.AccountRepository
+	repo        repository.AccountRepository
+	balanceRepo repository.BalanceRepository
 }
 
 func NewAccountHandler() AccountHandler {
-	return AccountHandler{repo: repository.NewAccountRepository()}
+	return AccountHandler{
+		repo:        repository.NewAccountRepository(),
+		balanceRepo: repository.NewBalanceRepository(),
+	}
 }
 
 func (a *AccountHandler) isExists() bool {
@@ -285,33 +289,42 @@ func (a *AccountHandler) GetAccountsPaginated(c *fiber.Ctx) error {
 
 	accounts, total, pages, err := repository.Account.FindAllPaginated(req)
 	if err != nil {
-		return c.Status(500).JSON(entity.ResponsePayloadPaginated{
+		return c.Status(500).JSON(entity.PaginatedResponse{
 			Success: false,
 			Message: err.Error(),
-			Data:    entity.ResponsePayloadDataPaginated{},
+			Data:    entity.PaginatedDetailResponse{},
 		})
 	}
 
-	return c.Status(200).JSON(entity.ResponsePayloadPaginated{
+	return c.Status(200).JSON(entity.PaginatedResponse{
 		Success: true,
 		Message: msgResponse,
-		Data: entity.ResponsePayloadDataPaginated{
-			Result:      accounts,
-			Total:       total,
-			PerPage:     req.Size,
-			CurrentPage: req.Page,
-			LastPage:    pages,
+		Data: entity.PaginatedDetailResponse{
+			Result: accounts,
+			Total:  total,
+			Pagination: entity.PaginationInfo{
+				PerPage:     req.Size,
+				CurrentPage: req.Page,
+				LastPage:    pages,
+			},
 		},
 	})
 }
 
 // ----------------- Merchants -----------------
 
-func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx) error {
+func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx, isPeriod bool) error {
+	var (
+		members interface{}
+		total   int64
+		pages   int64
+		err     error
+	)
+
 	// new account struct
 	payload := new(entity.PaginatedAccountRequest)
 	// parse body payload
-	if err := c.BodyParser(&payload); err != nil {
+	if err = c.BodyParser(&payload); err != nil {
 		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
@@ -324,18 +337,18 @@ func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx) error {
 
 	// validate request
 	if payload.PartnerID == "" {
-		return c.Status(400).JSON(entity.ResponsePayloadPaginated{
+		return c.Status(400).JSON(entity.PaginatedResponseMembers{
 			Success: false,
 			Message: "partnerId cannot be empty",
-			Data:    entity.ResponsePayloadDataPaginated{},
+			Data:    entity.PaginatedResponseMemberDetails{},
 		})
 	}
 
 	if payload.MerchantID == "" {
-		return c.Status(400).JSON(entity.ResponsePayloadPaginated{
+		return c.Status(400).JSON(entity.PaginatedResponseMembers{
 			Success: false,
 			Message: "merchantId cannot be empty",
-			Data:    entity.ResponsePayloadDataPaginated{},
+			Data:    entity.PaginatedResponseMemberDetails{},
 		})
 	}
 
@@ -351,25 +364,40 @@ func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx) error {
 	// re-apply type for filter condition
 	payload.Type = repository.AccountTypeRegular
 
-	members, total, pages, err := a.repo.FindMembersPaginated(payload)
+	if isPeriod {
+		members, total, pages, err = a.repo.FindMemberPeriodPaginated(payload)
+	} else {
+		members, total, pages, err = a.repo.FindMembersPaginated(payload)
+	}
 
 	if err != nil {
-		return c.Status(500).JSON(entity.ResponsePayloadPaginated{
+		return c.Status(500).JSON(entity.PaginatedResponseMembers{
 			Success: false,
 			Message: err.Error(),
-			Data:    entity.ResponsePayloadDataPaginated{},
+			Data:    entity.PaginatedResponseMemberDetails{},
 		})
 	}
 
-	return c.Status(200).JSON(entity.ResponsePayloadPaginated{
+	a.balanceRepo.Entity.MerchantID = payload.MerchantID
+	a.balanceRepo.Entity.PartnerID = payload.PartnerID
+	a.balanceRepo.Entity.Type = repository.AccountTypeMerchant
+	err = a.balanceRepo.GetLastBalance()
+	if err != nil {
+		utilities.Log.Println("cannot get current balance while on fetching account members")
+	}
+
+	return c.Status(200).JSON(entity.PaginatedResponseMembers{
 		Success: true,
 		Message: "members successfully fetched",
-		Data: entity.ResponsePayloadDataPaginated{
-			Result:      members,
-			Total:       total,
-			PerPage:     payload.Size,
-			CurrentPage: payload.Page,
-			LastPage:    pages,
+		Data: entity.PaginatedResponseMemberDetails{
+			Total:          total,
+			CurrentBalance: a.balanceRepo.Entity.CurrentBalance,
+			Result:         members,
+			Pagination: entity.PaginationInfo{
+				PerPage:     payload.Size,
+				CurrentPage: payload.Page,
+				LastPage:    pages,
+			},
 		},
 	})
 
