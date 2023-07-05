@@ -1,12 +1,12 @@
 package entity
 
 type InquiryBalance struct {
-	PartnerID      string `json:"partnerId" bson:"partnerId"`
-	MerchantID     string `json:"merchantId" bson:"merchantId"`
-	TerminalID     string `json:"terminalId,omitempty" bson:"terminalId"`
-	TerminalName   string `json:"terminalName,omitempty" bson:"terminalName"`
-	Type           int    `json:"-" bson:"-"`
-	CurrentBalance int64  `json:"currentBalance" bson:"lastBalanceNumeric"`
+	PartnerID    string `json:"partnerId" bson:"partnerId"`
+	MerchantID   string `json:"merchantId" bson:"merchantId"`
+	TerminalID   string `json:"terminalId,omitempty" bson:"terminalId"`
+	TerminalName string `json:"terminalName,omitempty" bson:"terminalName"`
+	Type         int    `json:"-" bson:"-"`
+	LastBalance  int64  `json:"lastBalance" bson:"lastBalanceNumeric"`
 }
 
 // BalanceInquiry

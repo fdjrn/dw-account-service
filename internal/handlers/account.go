@@ -404,7 +404,7 @@ func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx, isPeriod bool) error {
 		Message: "members successfully fetched",
 		Data: &entity.PaginatedResponseMemberDetails{
 			Total:       total,
-			LastBalance: a.balanceRepo.Entity.CurrentBalance,
+			LastBalance: a.balanceRepo.Entity.LastBalance,
 			Result:      members,
 			Pagination: entity.PaginationInfo{
 				PerPage:     payload.Size,

@@ -120,7 +120,7 @@ func (b *BalanceHandler) MerchantBalanceSummary(c *fiber.Ctx) error {
 //	}
 //
 //	// 3. add last balance with amount of topup
-//	t.LastBalance = balance.CurrentBalance + int64(t.Amount)
+//	t.LastBalance = balance.LastBalance + int64(t.Amount)
 //
 //	// 4. encrypt result addition
 //	strLastBalance := strconv.FormatInt(t.LastBalance, 10)
@@ -212,7 +212,7 @@ func (b *BalanceHandler) MerchantBalanceSummary(c *fiber.Ctx) error {
 //	// jika terjadi kegagalan produce message
 //
 //	// 2. Jika saldo cukup, maka lanjutkan proses pengurangan saldo (pembayaran)
-//	if balance.CurrentBalance < int64(d.Amount) {
+//	if balance.LastBalance < int64(d.Amount) {
 //		return c.Status(500).JSON(entity.Responses{
 //			Success: false,
 //			Message: "current balance is less than current transaction amount",
@@ -220,7 +220,7 @@ func (b *BalanceHandler) MerchantBalanceSummary(c *fiber.Ctx) error {
 //		})
 //	}
 //
-//	d.LastBalance = balance.CurrentBalance - int64(d.Amount)
+//	d.LastBalance = balance.LastBalance - int64(d.Amount)
 //
 //	// 3. Encrypt hasil pengurangan
 //	strLastBalance := strconv.FormatInt(d.LastBalance, 10)
@@ -243,7 +243,7 @@ func (b *BalanceHandler) MerchantBalanceSummary(c *fiber.Ctx) error {
 //	// untuk PoC masih Hardcoded dulu...
 //	// TransType --> 1: Pembelian Konten E-Course | 2: TBD
 //	d.ReceiptNumber = str.GenerateReceiptNumber(utilities.TransPayment, "")
-//	d.LastBalance = balance.CurrentBalance
+//	d.LastBalance = balance.LastBalance
 //
 //	// 7. Publish payment/deduction message to broker
 //	//payload, err := json.Marshal(d)

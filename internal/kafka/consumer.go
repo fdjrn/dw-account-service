@@ -129,10 +129,10 @@ func StartConsumer() {
 // HandleMessages contain function/logic that will be executed depends on topic name
 func HandleMessages(message *sarama.ConsumerMessage) {
 	var (
-		handler        = consumer.NewTransactionHandler()
-		trx            = new(entity.BalanceTransaction)
-		err            error
-		resultTopicMsg string
+		handler              = consumer.NewTransactionHandler()
+		trx                  = new(entity.BalanceTransaction)
+		err                  error
+		resultTopicMsg, cMsg string
 	)
 
 	utilities.Log.SetPrefix("[CONSUMER] ")
@@ -140,7 +140,7 @@ func HandleMessages(message *sarama.ConsumerMessage) {
 	switch message.Topic {
 	case topic.TopUpRequest:
 		trx, err = handler.DoHandleTopupTransaction(message)
-		cMsg := ""
+
 		if err != nil {
 			cMsg = fmt.Sprintf("| failed to process consumed message for topic: %s, with err: %s\n",
 				message.Topic,
@@ -157,7 +157,7 @@ func HandleMessages(message *sarama.ConsumerMessage) {
 		utilities.Log.Printf(cMsg)
 	case topic.DeductRequest:
 		trx, err = handler.DoHandleDeductTransaction(message)
-		cMsg := ""
+
 		if err != nil {
 			cMsg = fmt.Sprintf("| failed to process consumed message for topic: %s, with err: %s\n",
 				message.Topic,

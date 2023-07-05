@@ -309,7 +309,7 @@ func (m *MerchantHandler) BalanceTopup(c *fiber.Ctx) error {
 	tBalance.PartnerTransDate = payload.PartnerTransDate
 	tBalance.TransDate = time.Now().UnixMilli()
 	tBalance.TransNumber = str.GenerateTransNumber()
-	tBalance.ReceiptNumber = str.GenerateReceiptNumber(utilities.TransTopUp, "")
+	tBalance.ReceiptNumber = str.GenerateReceiptNumber(utilities.TransTypeTopUp, "")
 
 	// 4. encrypt result addition
 	tBalance.LastBalance = balance.CurrentBalance + int64(payload.Amount)

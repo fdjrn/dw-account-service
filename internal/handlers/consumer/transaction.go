@@ -77,7 +77,7 @@ func (t *TransactionHandler) DoHandleTopupTransaction(message *sarama.ConsumerMe
 
 	// return entity.BalanceTransaction data with status Success ("00")
 	data.TransDate = time.Now().Format("20060102150405")
-	data.ReceiptNumber = str.GenerateReceiptNumber(utilities.TransTopUp, "")
+	data.ReceiptNumber = str.GenerateReceiptNumber(utilities.TransTypeTopUp, "")
 	data.LastBalance = account.LastBalanceNumeric
 	data.Status = utilities.TrxStatusSuccess
 
@@ -97,6 +97,10 @@ func (t *TransactionHandler) DoHandleDeductTransaction(message *sarama.ConsumerM
 	t.accountRepository.Entity.MerchantID = data.MerchantID
 	t.accountRepository.Entity.TerminalID = data.TerminalID
 
+	if data.TerminalID == "" {
+		t.accountRepository.Entity.Type = repository.AccountTypeMerchant
+	}
+
 	account, err := t.accountRepository.FindOne()
 	if err != nil {
 		// invalid account infos
@@ -114,19 +118,20 @@ func (t *TransactionHandler) DoHandleDeductTransaction(message *sarama.ConsumerM
 		return data, err
 	}
 
+	if account.LastBalanceNumeric < data.Items[0].Amount {
+		// avoid update balance.
+		// return entity.BalanceTransaction data with status Insufficient Funds ("06")
+		data.Status = utilities.TrxStatusInsufficientFund
+		data.LastBalance = account.LastBalanceNumeric
+		return data, errors.New("insufficient account balance")
+	}
+
 	// subtract last balance with amount of deduct
 	data.LastBalance = account.LastBalanceNumeric - data.Items[0].Amount
 	data.LastBalanceEncrypted, err = crypt.Encrypt(
 		[]byte(account.SecretKey),
 		fmt.Sprintf("%016s", strconv.FormatInt(data.LastBalance, 10)),
 	)
-
-	if data.LastBalance < 0 {
-		// avoid update balance.
-		// return entity.BalanceTransaction data with status Insufficient Funds ("06")
-		data.Status = utilities.TrxStatusInsufficientFund
-		return data, errors.New("insufficient account balance")
-	}
 
 	// update account last balance
 	t.transactionRepository.Entity = data
@@ -137,9 +142,9 @@ func (t *TransactionHandler) DoHandleDeductTransaction(message *sarama.ConsumerM
 
 	// return entity.BalanceTransaction data with status Success ("00")
 	data.TransDate = time.Now().Format("20060102150405")
-	data.ReceiptNumber = str.GenerateReceiptNumber(utilities.TransTopUp, "")
-	data.LastBalance = account.LastBalanceNumeric
+	data.ReceiptNumber = str.GenerateReceiptNumber(utilities.TransTypePayment, "")
 	data.Status = utilities.TrxStatusSuccess
+	data.LastBalance = account.LastBalanceNumeric
 
 	return data, nil
 }

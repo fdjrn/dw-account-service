@@ -106,7 +106,7 @@ func (b *BalanceRepository) MerchantInquiryBalance(inquiry entity.BalanceInquiry
 
 	// convert lastBalance
 	//currentBalance, _ := tools.DecryptAndConvert([]byte(balance.SecretKey), balance.LastBalance)
-	//balance.CurrentBalance = int64(currentBalance)
+	//balance.LastBalance = int64(currentBalance)
 
 	return fiber.StatusOK, balance, nil
 }

@@ -11,8 +11,8 @@ import (
 //var charset = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 //
 //const (
-//	TransTopUp   = "Top-Up"
-//	TransPayment = "Payment"
+//	TransTypeTopUp   = "Top-Up"
+//	TransTypePayment = "Payment"
 //)
 
 func GenerateRandomString(length int, prefix, suffix string) string {
@@ -39,14 +39,14 @@ func GetUnixTimeNano() string {
 	return strconv.FormatInt(tUnixMicro, 10)
 }
 
-func GenerateReceiptNumber(transType string, id string) string {
+func GenerateReceiptNumber(transType int, id string) string {
 	tUnix := GetUnixTimeNano()
 	var r string
 
 	switch transType {
-	case utilities.TransTopUp:
+	case utilities.TransTypeTopUp:
 		r = fmt.Sprintf("1000%s%s", tUnix, id)
-	case utilities.TransPayment:
+	case utilities.TransTypePayment:
 		r = fmt.Sprintf("2000%s%s", tUnix, id)
 	}
 

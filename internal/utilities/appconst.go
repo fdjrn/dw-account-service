@@ -3,9 +3,9 @@ package utilities
 var Charset = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
 const (
-	TransTopUp      = "Top-Up"
-	TransPayment    = "Payment"
-	TransDistribute = "Distribution"
+	TransTypeTopUp        = 1 //"Top-Up"
+	TransTypePayment      = 2 //"Payment"
+	TransTypeDistribution = 3 //"Distribution"
 
 	TrxStatusSuccess          = "00"
 	TrxStatusPending          = "01"
