@@ -197,7 +197,7 @@ func (a *AccountRepository) FindMembers(request *entity.PaginatedAccountRequest,
 
 	skipValue := (request.Page - 1) * request.Size
 
-	ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), 2*time.Second)
 	defer cancel()
 
 	cursor, err := db.Mongo.Collection.Account.Find(

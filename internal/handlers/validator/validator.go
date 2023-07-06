@@ -9,68 +9,6 @@ func ValidateRequest(payload interface{}) (interface{}, error) {
 	var msg []string
 
 	switch p := payload.(type) {
-	//case *entity.BalanceTopUp:
-	//	if p.UniqueID == "" {
-	//		msg = append(msg, "uniqueId cannot be empty.")
-	//	}
-	//
-	//	if p.Amount == 0 {
-	//		msg = append(msg, "topup amount must be greater than 0.")
-	//	}
-	//
-	//	if p.InRefNumber == "" {
-	//		msg = append(msg, "inRefNumber cannot be empty.")
-	//	}
-	//
-	//	if p.ExRefNumber == "" {
-	//		msg = append(msg, "exRefNumber cannot be empty.")
-	//	}
-	//
-	//	if p.TransDate == 0 {
-	//		msg = append(msg, "exRefNumber must be greater than 0.")
-	//	}
-	//
-	//case *entity.MerchantTrxRequest:
-	//	if p.PartnerID == "" {
-	//		msg = append(msg, "partnerId cannot be empty.")
-	//	}
-	//
-	//	if p.MerchantID == "" {
-	//		msg = append(msg, "merchantId cannot be empty.")
-	//	}
-	//
-	//	if p.Amount == 0 {
-	//		msg = append(msg, "topupAmount must be greater than 0.")
-	//	}
-	//
-	//	if p.PartnerRefNumber == "" {
-	//		msg = append(msg, "partnerRefNumber cannot be empty.")
-	//	}
-	//
-	//	if p.PartnerTransDate == "" {
-	//		msg = append(msg, "partnerTransDate cannot be empty.")
-	//	}
-	//
-	//case *entity.BalanceDeduction:
-	//	if p.UniqueID == "" {
-	//		msg = append(msg, "uniqueId cannot be empty.")
-	//	}
-	//
-	//	if p.Amount == 0 {
-	//		msg = append(msg, "topup amount must be greater than 0.")
-	//	}
-	//
-	//	if p.TransType == 0 {
-	//		msg = append(msg, "transType cannot be empty.")
-	//	}
-	//
-	//	if p.Description == "" {
-	//		msg = append(msg, "transaction description cannot be empty.")
-	//	}
-	//
-	//	if p.InvoiceNumber == "" {
-	//		msg = append(msg, "invoiceNumber cannot be empty.")
-	//	}
 
 	case *entity.AccountBalance:
 
