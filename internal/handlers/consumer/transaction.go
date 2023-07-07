@@ -72,11 +72,15 @@ func (t *TransactionHandler) DoHandleTopupTransaction(message *sarama.ConsumerMe
 	t.transactionRepository.Entity = data
 	account, err = t.transactionRepository.UpdateBalance()
 	if err != nil {
+		utilities.Log.Println("| failed to update balance, with err: ", err.Error())
 		data.Status = utilities.TrxStatusFailed
+		return data, err
 	}
 
 	// return entity.BalanceTransaction data with status Success ("00")
-	data.TransDate = time.Now().Format("20060102150405")
+	trxDate := time.Now()
+	data.TransDateNumeric = trxDate.UnixMilli()
+	data.TransDate = trxDate.Format("20060102150405")
 	data.ReceiptNumber = str.GenerateReceiptNumber(utilities.TransTypeTopUp, "")
 	data.LastBalance = account.LastBalanceNumeric
 	data.Status = utilities.TrxStatusSuccess
@@ -141,7 +145,9 @@ func (t *TransactionHandler) DoHandleDeductTransaction(message *sarama.ConsumerM
 	}
 
 	// return entity.BalanceTransaction data with status Success ("00")
-	data.TransDate = time.Now().Format("20060102150405")
+	trxDate := time.Now()
+	data.TransDateNumeric = trxDate.UnixMilli()
+	data.TransDate = trxDate.Format("20060102150405")
 	data.ReceiptNumber = str.GenerateReceiptNumber(utilities.TransTypePayment, "")
 	data.Status = utilities.TrxStatusSuccess
 	data.LastBalance = account.LastBalanceNumeric
