@@ -3,9 +3,9 @@ package entity
 import "time"
 
 type PeriodsRequest struct {
-	Start     string    `json:"start,omitempty"`
+	Start     string    `json:"start,omitempty"` //YYYYMMDDhhmmss
 	StartDate time.Time `json:"-"`
-	End       string    `json:"end,omitempty"`
+	End       string    `json:"end,omitempty"` //YYYYMMDDhhmmss
 	EndDate   time.Time `json:"-"`
 }
 

@@ -329,24 +329,32 @@ func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx, isPeriod bool) error {
 
 	// validate periods parameter
 	if isPeriod {
-		payload.Periods.StartDate, err = time.Parse("20060102", payload.Periods.Start)
+		payload.Periods.StartDate, err = time.ParseInLocation(
+			"20060102150405",
+			fmt.Sprintf("%s%s", payload.Periods.Start, "000000"),
+			time.Now().Location(),
+		)
 		if err != nil {
-			return c.Status(400).JSON(entity.PaginatedResponseMembers{
+			return c.Status(400).JSON(entity.Responses{
 				Success: false,
 				Message: "invalid start periods",
 				Data:    nil,
 			})
 		}
 
-		payload.Periods.EndDate, err = time.Parse("20060102", payload.Periods.End)
+		payload.Periods.EndDate, err = time.ParseInLocation(
+			"20060102150405",
+			fmt.Sprintf("%s%s", payload.Periods.End, "235959"),
+			time.Now().Location(),
+		)
+
 		if err != nil {
-			return c.Status(400).JSON(entity.PaginatedResponseMembers{
+			return c.Status(400).JSON(entity.Responses{
 				Success: false,
 				Message: "invalid end periods",
 				Data:    nil,
 			})
 		}
-
 	}
 
 	// set type for payload validation
