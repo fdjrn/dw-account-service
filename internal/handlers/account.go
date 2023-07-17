@@ -355,6 +355,14 @@ func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx, isPeriod bool) error {
 				Data:    nil,
 			})
 		}
+
+		if payload.Periods.EndDate.Before(payload.Periods.StartDate) {
+			return c.Status(400).JSON(entity.Responses{
+				Success: false,
+				Message: "end period cannot be less than start period",
+				Data:    nil,
+			})
+		}
 	}
 
 	// set type for payload validation
