@@ -44,27 +44,3 @@ func ValidateRequest(payload interface{}) (interface{}, error) {
 	return msg, nil
 
 }
-
-//
-//func ValidateAccountDetailRequest(p *entity.AccountBalance) (interface{}, error) {
-//	var errMsq []string
-//
-//	// if non-merchant account type
-//	if p.TerminalID == "" {
-//		errMsq = append(errMsq, "terminalId cannot be empty.")
-//	}
-//
-//	if p.PartnerID == "" {
-//		errMsq = append(errMsq, "partnerId cannot be empty.")
-//	}
-//
-//	if p.MerchantID == "" {
-//		errMsq = append(errMsq, "merchantId cannot be empty.")
-//	}
-//
-//	if len(errMsq) > 0 {
-//		return errMsq, errors.New("request validation status failed")
-//	}
-//
-//	return errMsq, nil
-//}

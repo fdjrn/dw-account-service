@@ -8,13 +8,6 @@ import (
 	"time"
 )
 
-//var charset = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-//
-//const (
-//	TransTypeTopUp   = "Top-Up"
-//	TransTypePayment = "Payment"
-//)
-
 func GenerateRandomString(length int, prefix, suffix string) string {
 	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, length)
@@ -48,6 +41,8 @@ func GenerateReceiptNumber(transType int, id string) string {
 		r = fmt.Sprintf("1000%s%s", tUnix, id)
 	case utilities.TransTypePayment:
 		r = fmt.Sprintf("2000%s%s", tUnix, id)
+	case utilities.TransTypeDistribution:
+		r = fmt.Sprintf("3000%s%s", tUnix, id)
 	}
 
 	return r

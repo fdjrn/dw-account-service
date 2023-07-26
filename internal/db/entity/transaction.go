@@ -30,3 +30,10 @@ type BalanceTransaction struct {
 	CreatedAt            int64             `json:"createdAt,omitempty" bson:"createdAt,omitempty"`
 	UpdatedAt            int64             `json:"updatedAt,omitempty" bson:"updatedAt,omitempty"`
 }
+
+type BalanceDistributionInfo struct {
+	Index       int
+	Data        BalanceTransaction
+	WorkerIndex int
+	Err         error
+}

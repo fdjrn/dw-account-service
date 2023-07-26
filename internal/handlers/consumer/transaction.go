@@ -27,21 +27,35 @@ func NewTransactionHandler() TransactionHandler {
 	}
 }
 
-func (t *TransactionHandler) DoHandleTopupTransaction(message *sarama.ConsumerMessage) (*entity.BalanceTransaction, error) {
+func modifyBalance(current, amount int64, keys string, transType int) (int64, string) {
+	var last int64
 
-	data := new(entity.BalanceTransaction)
-	err := json.Unmarshal(message.Value, &data)
-	if err != nil {
-		return nil, err
+	if transType == utilities.TransTypeTopUp {
+		last = current + amount
+	} else {
+		last = current - amount
 	}
 
-	// validate account partner, merchant and terminal
+	encrypted, err := crypt.Encrypt(
+		[]byte(keys),
+		fmt.Sprintf("%016s", strconv.FormatInt(last, 10)),
+	)
+
+	if err != nil {
+		return last, "-"
+	}
+
+	return last, encrypted
+}
+
+func (t *TransactionHandler) doValidation(data *entity.BalanceTransaction) (*entity.BalanceTransaction, error) {
+
 	t.accountRepository.Entity.PartnerID = data.PartnerID
 	t.accountRepository.Entity.MerchantID = data.MerchantID
 	t.accountRepository.Entity.TerminalID = data.TerminalID
 
 	if data.TerminalID == "" {
-		t.accountRepository.Entity.Type = repository.AccountTypeMerchant
+		t.accountRepository.Entity.Type = utilities.AccountTypeMerchant
 	}
 
 	account, err := t.accountRepository.FindOne()
@@ -61,16 +75,62 @@ func (t *TransactionHandler) DoHandleTopupTransaction(message *sarama.ConsumerMe
 		return data, err
 	}
 
-	// add last balance with amount of topup
-	data.LastBalance = account.LastBalanceNumeric + data.Items[0].Amount
-	data.LastBalanceEncrypted, err = crypt.Encrypt(
-		[]byte(account.SecretKey),
-		fmt.Sprintf("%016s", strconv.FormatInt(data.LastBalance, 10)),
+	t.accountRepository.Entity = account
+
+	data.LastBalance = account.LastBalanceNumeric
+
+	if data.TransType == utilities.TransTypeDistribution {
+		memberCount, err2 := t.accountRepository.CountMembers()
+		if err2 != nil {
+			data.Status = utilities.TrxStatusFailed
+			return data, errors.New("failed to get total active members")
+		}
+
+		data.TotalAmount = memberCount * data.Items[0].Amount
+		data.Items[0].Qty = int(memberCount)
+
+	}
+
+	if data.TransType > utilities.TransTypeTopUp && data.LastBalance < data.TotalAmount {
+		// avoid update balance.
+		// return entity.BalanceTransaction data with status Insufficient Funds ("06")
+		data.Status = utilities.TrxStatusInsufficientFund
+		return data, errors.New("insufficient account balance")
+	}
+
+	return data, nil
+}
+
+func (t *TransactionHandler) DoHandleTransactionRequest(message *sarama.ConsumerMessage) (*entity.BalanceTransaction, error) {
+
+	var err error
+
+	data := new(entity.BalanceTransaction)
+	err = json.Unmarshal(message.Value, &data)
+	if err != nil {
+		return nil, err
+	}
+
+	// validate account partner, merchant and terminal
+	data, err = t.doValidation(data)
+	if err != nil {
+		return data, err
+	}
+
+	// modify last balance with amount of transaction, based on transType value
+	lb, encLb := modifyBalance(
+		t.accountRepository.Entity.LastBalanceNumeric,
+		data.TotalAmount,
+		t.accountRepository.Entity.SecretKey,
+		data.TransType,
 	)
+
+	data.LastBalance = lb
+	data.LastBalanceEncrypted = encLb
 
 	// update account last balance
 	t.transactionRepository.Entity = data
-	account, err = t.transactionRepository.UpdateBalance()
+	updatedAccount, err := t.transactionRepository.UpdateBalance()
 	if err != nil {
 		utilities.Log.Println("| failed to update balance, with err: ", err.Error())
 		data.Status = utilities.TrxStatusFailed
@@ -81,76 +141,10 @@ func (t *TransactionHandler) DoHandleTopupTransaction(message *sarama.ConsumerMe
 	trxDate := time.Now()
 	data.TransDateNumeric = trxDate.UnixMilli()
 	data.TransDate = trxDate.Format("20060102150405")
-	data.ReceiptNumber = str.GenerateReceiptNumber(utilities.TransTypeTopUp, "")
-	data.LastBalance = account.LastBalanceNumeric
+
+	data.ReceiptNumber = str.GenerateReceiptNumber(data.TransType, "")
+	data.LastBalance = updatedAccount.LastBalanceNumeric
 	data.Status = utilities.TrxStatusSuccess
-
-	return data, nil
-}
-
-func (t *TransactionHandler) DoHandleDeductTransaction(message *sarama.ConsumerMessage) (*entity.BalanceTransaction, error) {
-
-	data := new(entity.BalanceTransaction)
-	err := json.Unmarshal(message.Value, &data)
-	if err != nil {
-		return nil, err
-	}
-
-	// validate account partner, merchant and terminal
-	t.accountRepository.Entity.PartnerID = data.PartnerID
-	t.accountRepository.Entity.MerchantID = data.MerchantID
-	t.accountRepository.Entity.TerminalID = data.TerminalID
-
-	if data.TerminalID == "" {
-		t.accountRepository.Entity.Type = repository.AccountTypeMerchant
-	}
-
-	account, err := t.accountRepository.FindOne()
-	if err != nil {
-		// invalid account infos
-		data.Status = utilities.TrxStatusInvalidAccount
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return data, errors.New("unable to find account detail with supplied parameters")
-		}
-		return data, err
-	}
-
-	// validate account is in active status
-	if !account.Active {
-		utilities.Log.Println("| account deactivated, balance update cannot be processed ")
-		data.Status = utilities.TrxStatusInvalidAccount
-		return data, err
-	}
-
-	if account.LastBalanceNumeric < data.Items[0].Amount {
-		// avoid update balance.
-		// return entity.BalanceTransaction data with status Insufficient Funds ("06")
-		data.Status = utilities.TrxStatusInsufficientFund
-		data.LastBalance = account.LastBalanceNumeric
-		return data, errors.New("insufficient account balance")
-	}
-
-	// subtract last balance with amount of deduct
-	data.LastBalance = account.LastBalanceNumeric - data.Items[0].Amount
-	data.LastBalanceEncrypted, err = crypt.Encrypt(
-		[]byte(account.SecretKey),
-		fmt.Sprintf("%016s", strconv.FormatInt(data.LastBalance, 10)),
-	)
-
-	// update account last balance
-	t.transactionRepository.Entity = data
-	account, err = t.transactionRepository.UpdateBalance()
-	if err != nil {
-		data.Status = utilities.TrxStatusFailed
-	}
-
-	// return entity.BalanceTransaction data with status Success ("00")
-	trxDate := time.Now()
-	data.TransDateNumeric = trxDate.UnixMilli()
-	data.TransDate = trxDate.Format("20060102150405")
-	data.ReceiptNumber = str.GenerateReceiptNumber(utilities.TransTypePayment, "")
-	data.Status = utilities.TrxStatusSuccess
-	data.LastBalance = account.LastBalanceNumeric
 
 	return data, nil
 }

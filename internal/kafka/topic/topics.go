@@ -6,4 +6,7 @@ const (
 
 	DeductRequest = "mdw.transaction.deduct.request"
 	DeductResult  = "mdw.transaction.deduct.result"
+
+	DistributionRequest = "mdw.transaction.distribute.request"
+	DistributionResult  = "mdw.transaction.distribute.result"
 )

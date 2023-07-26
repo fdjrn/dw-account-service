@@ -2,13 +2,8 @@ package kafka
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"github.com/Shopify/sarama"
 	"github.com/dw-account-service/configs"
-	"github.com/dw-account-service/internal/db/entity"
-	"github.com/dw-account-service/internal/handlers/consumer"
-	"github.com/dw-account-service/internal/kafka/topic"
 	"github.com/dw-account-service/internal/utilities"
 	"log"
 	"strings"
@@ -109,7 +104,8 @@ func StartConsumer() {
 		for {
 
 			if err = client.Consume(context.Background(), topicMsg, &subscriber); err != nil {
-				log.Panicf("Error from consumer: %v", err)
+				utilities.Log.Printf("| Error from consumer: %v", err)
+				//log.Panicf("Error from consumer: %v", err)
 			}
 
 			// check if context was cancelled, signaling that the consumer should stop
@@ -124,64 +120,4 @@ func StartConsumer() {
 
 	utilities.Log.Println("| consumer >> up and running!...")
 	wg.Done()
-}
-
-// HandleMessages contain function/logic that will be executed depends on topic name
-func HandleMessages(message *sarama.ConsumerMessage) {
-	var (
-		handler              = consumer.NewTransactionHandler()
-		trx                  = new(entity.BalanceTransaction)
-		err                  error
-		resultTopicMsg, cMsg string
-	)
-
-	utilities.Log.SetPrefix("[CONSUMER] ")
-
-	switch message.Topic {
-	case topic.TopUpRequest:
-		trx, err = handler.DoHandleTopupTransaction(message)
-
-		if err != nil {
-			cMsg = fmt.Sprintf("| failed to process consumed message for topic: %s, with err: %s\n",
-				message.Topic,
-				err.Error(),
-			)
-		} else {
-			cMsg = fmt.Sprintf("| topup with RefNo: %s, has been successfully processed with receipt number: %s\n",
-				trx.ReferenceNo,
-				trx.ReceiptNumber,
-			)
-		}
-
-		resultTopicMsg = topic.TopUpResult
-		utilities.Log.Printf(cMsg)
-	case topic.DeductRequest:
-		trx, err = handler.DoHandleDeductTransaction(message)
-
-		if err != nil {
-			cMsg = fmt.Sprintf("| failed to process consumed message for topic: %s, with err: %s\n",
-				message.Topic,
-				err.Error(),
-			)
-		} else {
-			cMsg = fmt.Sprintf("| payment with RefNo: %s, has been successfully processed with receipt number: %s\n",
-				trx.ReferenceNo,
-				trx.ReceiptNumber,
-			)
-		}
-
-		resultTopicMsg = topic.DeductResult
-		utilities.Log.Printf(cMsg)
-
-	default:
-		utilities.Log.Println("| Unknown topic message")
-		return
-	}
-
-	payload, _ := json.Marshal(trx)
-	err = ProduceMsg(resultTopicMsg, payload)
-	if err != nil {
-		utilities.Log.Println("| cannot produce message for topic: ", message.Topic, ", with err: ", err.Error())
-	}
-
 }
