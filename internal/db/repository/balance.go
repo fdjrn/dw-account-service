@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/dw-account-service/internal/db"
 	"github.com/dw-account-service/internal/db/entity"
-	"github.com/dw-account-service/internal/utilities/crypt"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -37,8 +36,11 @@ func (b *BalanceRepository) GetLastBalance() error {
 		filter = append(filter, bson.D{{"terminalId", b.Entity.TerminalID}}...)
 	}
 
+	ctx, cancel := context.WithTimeout(context.TODO(), 3*time.Second)
+	defer cancel()
+
 	err := db.Mongo.Collection.Account.FindOne(
-		context.Background(),
+		ctx,
 		filter,
 		options.FindOne().SetProjection(bson.D{
 			{"_id", 0},
@@ -61,30 +63,6 @@ func (b *BalanceRepository) GetLastBalance() error {
 	return nil
 }
 
-func (b *BalanceRepository) InquiryBalance(uid string) (int, entity.BalanceInquiry, error) {
-
-	//id, _ := primitive.ObjectIDFromHex(uid)
-
-	// filter criteria
-	filter := bson.D{{"uniqueId", uid}, {"active", true}}
-
-	var balance entity.BalanceInquiry
-	err := db.Mongo.Collection.Account.FindOne(
-		context.Background(),
-		filter,
-	).Decode(&balance)
-
-	if err != nil {
-		return fiber.StatusInternalServerError, entity.BalanceInquiry{}, err
-	}
-
-	// convert lastBalance
-	currentBalance, _ := crypt.DecryptAndConvert([]byte(balance.SecretKey), balance.LastBalance)
-	balance.CurrentBalance = int64(currentBalance)
-
-	return fiber.StatusOK, balance, nil
-}
-
 func (b *BalanceRepository) MerchantInquiryBalance(inquiry entity.BalanceInquiry) (int, entity.BalanceInquiry, error) {
 
 	// filter criteria
@@ -93,9 +71,12 @@ func (b *BalanceRepository) MerchantInquiryBalance(inquiry entity.BalanceInquiry
 		{"merchantId", inquiry.MerchantID},
 	}
 
+	ctx, cancel := context.WithTimeout(context.TODO(), 3*time.Second)
+	defer cancel()
+
 	var balance entity.BalanceInquiry
 	err := db.Mongo.Collection.Account.FindOne(
-		context.Background(),
+		ctx,
 		filter,
 		options.FindOne().SetProjection(bson.D{{"_id", 0}}),
 	).Decode(&balance)
@@ -123,7 +104,10 @@ func (b *BalanceRepository) UpdateBalance(uid string, lastBalance string) (int, 
 		}},
 	}
 
-	result, err := db.Mongo.Collection.Account.UpdateOne(context.TODO(), filter, update)
+	ctx, cancel := context.WithTimeout(context.TODO(), 3*time.Second)
+	defer cancel()
+
+	result, err := db.Mongo.Collection.Account.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return fiber.StatusInternalServerError, err
 	}
@@ -148,7 +132,10 @@ func (b *BalanceRepository) UpdateMerchantBalance(t *entity.BalanceTopUp) (int, 
 		}},
 	}
 
-	result, err := db.Mongo.Collection.Account.UpdateOne(context.TODO(), filter, update)
+	ctx, cancel := context.WithTimeout(context.TODO(), 3*time.Second)
+	defer cancel()
+
+	result, err := db.Mongo.Collection.Account.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return fiber.StatusInternalServerError, err
 	}

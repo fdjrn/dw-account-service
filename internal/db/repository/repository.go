@@ -2,29 +2,8 @@ package repository
 
 import (
 	"github.com/dw-account-service/internal/db/entity"
+	"github.com/dw-account-service/internal/utilities"
 	"go.mongodb.org/mongo-driver/bson"
-)
-
-var (
-	Account = AccountRepository{}
-	Balance = BalanceRepository{}
-	Topup   = TopupRepository{}
-)
-
-const (
-	AccountTypeRegular  = 1
-	AccountTypeMerchant = 2
-
-	AccountStatusActive      = "active"
-	AccountStatusDeactivated = "deactivated"
-	AccountStatusAll         = "all"
-
-	TrxStatusSuccess        = "00"
-	TrxStatusPending        = "01"
-	TrxStatusPartialSuccess = "02"
-	TrxStatusInvalid        = "03"
-	TrxStatusDuplicate      = "04"
-	TrxStatusFailed         = "05"
 )
 
 func GetDefaultAccountFilter(account *entity.AccountBalance) bson.D {
@@ -39,6 +18,20 @@ func GetDefaultAccountFilter(account *entity.AccountBalance) bson.D {
 
 	if account.Type > 0 {
 		filter = append(filter, bson.D{{"type", account.Type}}...)
+	}
+
+	return filter
+}
+
+func GetDefaultAccountStatusFilter(status string) bson.D {
+	var filter = bson.D{}
+
+	switch status {
+	case utilities.AccountStatusActive:
+		filter = bson.D{{"active", true}}
+	case utilities.AccountStatusDeactivated:
+		filter = bson.D{{"active", false}}
+	default:
 	}
 
 	return filter

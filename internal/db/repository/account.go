@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/dw-account-service/internal/db"
 	"github.com/dw-account-service/internal/db/entity"
+	"github.com/dw-account-service/internal/utilities"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -21,7 +22,11 @@ func NewAccountRepository() AccountRepository {
 }
 
 func (a *AccountRepository) Create() (interface{}, error) {
-	result, err := db.Mongo.Collection.Account.InsertOne(context.TODO(), a.Entity)
+
+	ctx, cancel := context.WithTimeout(context.TODO(), 1500*time.Millisecond)
+	defer cancel()
+
+	result, err := db.Mongo.Collection.Account.InsertOne(ctx, a.Entity)
 	if err != nil {
 		return nil, err
 	}
@@ -32,8 +37,11 @@ func (a *AccountRepository) Create() (interface{}, error) {
 // FindByID : id args accept interface{} or primitive.ObjectID make sure to convert it first
 func (a *AccountRepository) FindByID(id interface{}) (*entity.AccountBalance, error) {
 	filter := bson.D{{"_id", id}}
+	ctx, cancel := context.WithTimeout(context.TODO(), 1500*time.Millisecond)
+	defer cancel()
+
 	var account = new(entity.AccountBalance)
-	err := db.Mongo.Collection.Account.FindOne(context.TODO(), filter).Decode(account)
+	err := db.Mongo.Collection.Account.FindOne(ctx, filter).Decode(account)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +51,11 @@ func (a *AccountRepository) FindByID(id interface{}) (*entity.AccountBalance, er
 
 func (a *AccountRepository) FindOne() (*entity.AccountBalance, error) {
 	var account entity.AccountBalance
-	err := db.Mongo.Collection.Account.FindOne(context.TODO(), GetDefaultAccountFilter(a.Entity)).Decode(&account)
+
+	ctx, cancel := context.WithTimeout(context.TODO(), 1500*time.Millisecond)
+	defer cancel()
+
+	err := db.Mongo.Collection.Account.FindOne(ctx, GetDefaultAccountFilter(a.Entity)).Decode(&account)
 	if err != nil {
 		return nil, err
 	}
@@ -66,14 +78,7 @@ return:
 	err 			error
 */
 func (a *AccountRepository) FindAllPaginated(request *entity.PaginatedAccountRequest) (interface{}, int64, int64, error) {
-	var filter = bson.D{}
-	switch request.Status {
-	case AccountStatusActive:
-		filter = bson.D{{"active", true}}
-	case AccountStatusDeactivated:
-		filter = bson.D{{"active", false}}
-	default:
-	}
+	filter := GetDefaultAccountStatusFilter(request.Status)
 
 	if request.Type > 0 {
 		filter = append(filter, bson.D{{"type", request.Type}}...)
@@ -81,7 +86,7 @@ func (a *AccountRepository) FindAllPaginated(request *entity.PaginatedAccountReq
 
 	skipValue := (request.Page - 1) * request.Size
 
-	ctx, cancel := context.WithTimeout(context.TODO(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), 1500*time.Millisecond)
 	defer cancel()
 
 	cursor, err := db.Mongo.Collection.Account.Find(
@@ -99,7 +104,7 @@ func (a *AccountRepository) FindAllPaginated(request *entity.PaginatedAccountReq
 
 	totalDocs, _ := db.Mongo.Collection.Account.CountDocuments(ctx, filter)
 	var accounts []entity.AccountBalance
-	if err = cursor.All(context.TODO(), &accounts); err != nil {
+	if err = cursor.All(ctx, &accounts); err != nil {
 		return nil, 0, 0, err
 	}
 
@@ -121,8 +126,11 @@ func (a *AccountRepository) DeactivateAccount(payload *entity.UnregisterAccount)
 		}},
 	}
 
+	ctx, cancel := context.WithTimeout(context.TODO(), 1500*time.Millisecond)
+	defer cancel()
+
 	result, err := db.Mongo.Collection.Account.UpdateOne(
-		context.TODO(),
+		ctx,
 		GetDefaultAccountFilter(&entity.AccountBalance{
 			PartnerID:  payload.PartnerID,
 			MerchantID: payload.MerchantID,
@@ -142,7 +150,10 @@ func (a *AccountRepository) DeactivateAccount(payload *entity.UnregisterAccount)
 
 func (a *AccountRepository) InsertDeactivatedAccount(account *entity.UnregisterAccount) (interface{}, error) {
 
-	result, err := db.Mongo.Collection.UnregisterAccount.InsertOne(context.TODO(), account)
+	ctx, cancel := context.WithTimeout(context.TODO(), 1500*time.Millisecond)
+	defer cancel()
+
+	result, err := db.Mongo.Collection.UnregisterAccount.InsertOne(ctx, account)
 
 	if err != nil {
 		return nil, err
@@ -154,7 +165,11 @@ func (a *AccountRepository) InsertDeactivatedAccount(account *entity.UnregisterA
 
 func (a *AccountRepository) RemoveDeactivatedAccount(acc *entity.UnregisterAccount) (int, error) {
 	filter := bson.D{{"uniqueId", acc.UniqueID}}
-	result, err := db.Mongo.Collection.UnregisterAccount.DeleteOne(context.TODO(), filter)
+
+	ctx, cancel := context.WithTimeout(context.TODO(), 1500*time.Millisecond)
+	defer cancel()
+
+	result, err := db.Mongo.Collection.UnregisterAccount.DeleteOne(ctx, filter)
 
 	if err != nil {
 		return fiber.StatusInternalServerError, err
@@ -170,14 +185,7 @@ func (a *AccountRepository) RemoveDeactivatedAccount(acc *entity.UnregisterAccou
 // ----------------- MERCHANTS ----------------
 
 func (a *AccountRepository) FindMembersPaginated(request *entity.PaginatedAccountRequest, isPeriod bool) (interface{}, int64, int64, error) {
-	filter := bson.D{}
-	switch request.Status {
-	case AccountStatusActive:
-		filter = bson.D{{"active", true}}
-	case AccountStatusDeactivated:
-		filter = bson.D{{"active", false}}
-	default:
-	}
+	filter := GetDefaultAccountStatusFilter(request.Status)
 
 	filter = append(filter, bson.D{
 		{"partnerId", request.PartnerID},
@@ -197,7 +205,7 @@ func (a *AccountRepository) FindMembersPaginated(request *entity.PaginatedAccoun
 
 	skipValue := (request.Page - 1) * request.Size
 
-	ctx, cancel := context.WithTimeout(context.TODO(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), 1500*time.Millisecond)
 	defer cancel()
 
 	cursor, err := db.Mongo.Collection.Account.Find(
@@ -215,7 +223,7 @@ func (a *AccountRepository) FindMembersPaginated(request *entity.PaginatedAccoun
 
 	totalDocs, _ := db.Mongo.Collection.Account.CountDocuments(ctx, filter)
 	var accounts []entity.AccountBalance
-	if err = cursor.All(context.TODO(), &accounts); err != nil {
+	if err = cursor.All(ctx, &accounts); err != nil {
 		return nil, 0, 0, err
 	}
 
@@ -228,14 +236,7 @@ func (a *AccountRepository) FindMembersPaginated(request *entity.PaginatedAccoun
 }
 
 func (a *AccountRepository) FindMembers(request *entity.PaginatedAccountRequest) ([]entity.AccountBalance, error) {
-	filter := bson.D{}
-	switch request.Status {
-	case AccountStatusActive:
-		filter = bson.D{{"active", true}}
-	case AccountStatusDeactivated:
-		filter = bson.D{{"active", false}}
-	default:
-	}
+	filter := GetDefaultAccountStatusFilter(request.Status)
 
 	filter = append(filter, bson.D{
 		{"partnerId", request.PartnerID},
@@ -243,7 +244,7 @@ func (a *AccountRepository) FindMembers(request *entity.PaginatedAccountRequest)
 		{"type", request.Type},
 	}...)
 
-	ctx, cancel := context.WithTimeout(context.TODO(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), 3*time.Second)
 	defer cancel()
 
 	cursor, err := db.Mongo.Collection.Account.Find(ctx, filter)
@@ -253,7 +254,7 @@ func (a *AccountRepository) FindMembers(request *entity.PaginatedAccountRequest)
 	}
 
 	var accounts []entity.AccountBalance
-	if err = cursor.All(context.TODO(), &accounts); err != nil {
+	if err = cursor.All(ctx, &accounts); err != nil {
 		return nil, err
 	}
 
@@ -264,11 +265,11 @@ func (a *AccountRepository) CountMembers() (int64, error) {
 	filter := bson.D{
 		{"partnerId", a.Entity.PartnerID},
 		{"merchantId", a.Entity.MerchantID},
-		{"type", AccountTypeRegular},
+		{"type", utilities.AccountTypeRegular},
 		{"active", true},
 	}
 
-	ctx, cancel := context.WithTimeout(context.TODO(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), 1500*time.Millisecond)
 	defer cancel()
 
 	totalDocs, err := db.Mongo.Collection.Account.CountDocuments(ctx, filter)

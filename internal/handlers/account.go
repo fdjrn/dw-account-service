@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/dw-account-service/internal/db"
 	"github.com/dw-account-service/internal/db/entity"
@@ -29,18 +30,15 @@ func NewAccountHandler() AccountHandler {
 	}
 }
 
-func (a *AccountHandler) isExists() bool {
+func (a *AccountHandler) existsAccount() (bool, error) {
 	_, err := a.repo.FindOne()
 	if err != nil {
-		// no document found, its mean it can be registered
-		if err == mongo.ErrNoDocuments {
-			return false
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return false, nil
 		}
-
-		utilities.Log.Println(err.Error())
-		return true
+		return false, err
 	}
-	return true
+	return true, nil
 }
 
 func (a *AccountHandler) Register(c *fiber.Ctx) error {
@@ -77,7 +75,7 @@ func (a *AccountHandler) Register(c *fiber.Ctx) error {
 	payload.SecretKey = key
 	payload.Active = true
 	payload.UniqueID = fmt.Sprintf("%s%s", payload.MerchantID, payload.TerminalID)
-	if payload.Type == repository.AccountTypeMerchant {
+	if payload.Type == utilities.AccountTypeMerchant {
 		payload.UniqueID = ""
 		payload.TerminalID = ""
 		payload.TerminalName = ""
@@ -89,10 +87,16 @@ func (a *AccountHandler) Register(c *fiber.Ctx) error {
 	payload.UpdatedAt = payload.CreatedAt
 
 	a.repo.Entity = payload
-	if a.isExists() {
+
+	exists, err := a.existsAccount()
+	if !exists && err != nil {
+		return SendDefaultErrResponse("failed to validate existing account, ", err, c)
+	}
+
+	if exists {
 		responseData := map[string]interface{}{"partnerId": payload.PartnerID, "merchantId": payload.MerchantID}
 
-		if payload.Type == repository.AccountTypeRegular {
+		if payload.Type == utilities.AccountTypeRegular {
 			responseData["terminalId"] = payload.TerminalID
 		}
 
@@ -105,14 +109,13 @@ func (a *AccountHandler) Register(c *fiber.Ctx) error {
 
 	insertedId, err := a.repo.Create()
 	if err != nil {
-		return c.Status(500).JSON(entity.Responses{
-			Success: false,
-			Message: err.Error(),
-			Data:    nil,
-		})
+		return SendDefaultErrResponse("", err, c)
 	}
 
-	createdAccount, _ := a.repo.FindByID(insertedId)
+	createdAccount, err := a.repo.FindByID(insertedId)
+	if err != nil {
+		return SendDefaultErrResponse("cannot fetch current registered account, ", err, c)
+	}
 
 	return c.Status(201).JSON(entity.Responses{
 		Success: true,
@@ -140,7 +143,12 @@ func (a *AccountHandler) Unregister(c *fiber.Ctx) error {
 	a.repo.Entity.MerchantID = payload.MerchantID
 	a.repo.Entity.TerminalID = payload.TerminalID
 
-	if !a.isExists() {
+	exists, err := a.existsAccount()
+	if !exists {
+		if err != nil {
+			return SendDefaultErrResponse("failed to validate existing account, ", err, c)
+		}
+
 		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: "account not found",
@@ -148,13 +156,9 @@ func (a *AccountHandler) Unregister(c *fiber.Ctx) error {
 		})
 	}
 
-	err := a.repo.DeactivateAccount(payload)
+	err = a.repo.DeactivateAccount(payload)
 	if err != nil {
-		return c.Status(500).JSON(entity.Responses{
-			Success: false,
-			Message: err.Error(),
-			Data:    nil,
-		})
+		return SendDefaultErrResponse("", err, c)
 	}
 
 	// insert into accountDeactivated collection
@@ -168,6 +172,9 @@ func (a *AccountHandler) Unregister(c *fiber.Ctx) error {
 	payload.UniqueID = doc.UniqueID
 
 	_, err = a.repo.InsertDeactivatedAccount(payload)
+	if err != nil {
+		return SendDefaultErrResponse("failed on insert deactivated account data, ", err, c)
+	}
 
 	return c.Status(200).JSON(entity.Responses{
 		Success: true,
@@ -181,15 +188,7 @@ func (a *AccountHandler) GetAccountByID(c *fiber.Ctx) error {
 	account, err := a.repo.FindByID(id)
 
 	if err != nil {
-		errMsg := err.Error()
-		if err == mongo.ErrNoDocuments {
-			errMsg = "account not found or its already been unregistered"
-		}
-		return c.Status(500).JSON(entity.Responses{
-			Success: false,
-			Message: errMsg,
-			Data:    nil,
-		})
+		return SendDefaultErrResponse("failed to fetch account, ", err, c)
 	}
 
 	return c.Status(200).JSON(entity.Responses{
@@ -230,16 +229,7 @@ func (a *AccountHandler) GetAccount(c *fiber.Ctx) error {
 	account, err := a.repo.FindOne()
 
 	if err != nil {
-		errMsg := err.Error()
-		if err == mongo.ErrNoDocuments {
-			errMsg = "account not found or its already been unregistered"
-		}
-
-		return c.Status(500).JSON(entity.Responses{
-			Success: false,
-			Message: errMsg,
-			Data:    nil,
-		})
+		return SendDefaultErrResponse("failed to fetch account, ", err, c)
 	}
 
 	return c.Status(200).JSON(entity.Responses{
@@ -287,13 +277,9 @@ func (a *AccountHandler) GetAccountsPaginated(c *fiber.Ctx) error {
 		req.Size = 10
 	}
 
-	accounts, total, pages, err := repository.Account.FindAllPaginated(req)
+	accounts, total, pages, err := a.repo.FindAllPaginated(req)
 	if err != nil {
-		return c.Status(500).JSON(entity.PaginatedResponse{
-			Success: false,
-			Message: err.Error(),
-			Data:    entity.PaginatedDetailResponse{},
-		})
+		return SendDefaultPaginationErrResponse("", err, c)
 	}
 
 	return c.Status(200).JSON(entity.PaginatedResponse{
@@ -319,7 +305,7 @@ func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx, isPeriod bool) error {
 	// new account struct
 	payload := new(entity.PaginatedAccountRequest)
 	// parse body payload
-	if err = c.BodyParser(&payload); err != nil {
+	if err = c.BodyParser(payload); err != nil {
 		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
@@ -366,7 +352,7 @@ func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx, isPeriod bool) error {
 	}
 
 	// set type for payload validation
-	payload.Type = repository.AccountTypeMerchant
+	payload.Type = utilities.AccountTypeMerchant
 
 	// validate request
 	if payload.PartnerID == "" {
@@ -395,24 +381,20 @@ func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx, isPeriod bool) error {
 	}
 
 	// re-apply type for filter condition
-	payload.Type = repository.AccountTypeRegular
+	payload.Type = utilities.AccountTypeRegular
 
-	members, total, pages, err := a.repo.FindMembers(payload, isPeriod)
+	members, total, pages, err := a.repo.FindMembersPaginated(payload, isPeriod)
 
 	if err != nil {
-		return c.Status(500).JSON(entity.PaginatedResponseMembers{
-			Success: false,
-			Message: err.Error(),
-			Data:    nil,
-		})
+		return SendDefaultPaginationErrResponse("cannot fetch members, ", err, c)
 	}
 
 	a.balanceRepo.Entity.MerchantID = payload.MerchantID
 	a.balanceRepo.Entity.PartnerID = payload.PartnerID
-	a.balanceRepo.Entity.Type = repository.AccountTypeMerchant
+	a.balanceRepo.Entity.Type = utilities.AccountTypeMerchant
 	err = a.balanceRepo.GetLastBalance()
 	if err != nil {
-		utilities.Log.Println("cannot get current balance while on fetching account members")
+		return SendDefaultPaginationErrResponse("cannot get merchant curren balance, ", err, c)
 	}
 
 	return c.Status(200).JSON(entity.PaginatedResponseMembers{
