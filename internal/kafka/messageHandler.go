@@ -7,6 +7,7 @@ import (
 	"github.com/dw-account-service/internal/handlers/consumer"
 	"github.com/dw-account-service/internal/kafka/topic"
 	"github.com/dw-account-service/internal/utilities"
+	"time"
 )
 
 // HandleMessages contain function/logic that will be executed depends on topic name
@@ -55,13 +56,15 @@ func HandleMessages(message *sarama.ConsumerMessage) {
 	}
 
 	// Do Balance Distribution among members
-	if trx.TransType == utilities.TransTypeDistribution {
-		utilities.Log.Println("| start balance distribution ...... ")
+	if trx.TransType == utilities.TransTypeDistribution && trx.Status == utilities.TrxStatusSuccess {
+		start := time.Now()
+		utilities.Log.Println("| starting merchant balance distribution ... ")
 		t := NewDistributionTrx()
 		err = t.DoBalanceDistribution(trx)
 		if err != nil {
 			utilities.Log.Println("| error occurred: ", err.Error())
 		}
+		utilities.Log.Println("| balance distribution finished in", time.Since(start).Seconds(), "seconds")
 	}
 
 }

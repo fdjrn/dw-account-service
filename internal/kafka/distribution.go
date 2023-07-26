@@ -15,14 +15,14 @@ import (
 )
 
 type DistributionTrx struct {
-	accountRepo repository.AccountRepository
-	trxRepo     repository.TransactionRepository
+	accountRepo     repository.AccountRepository
+	transactionRepo repository.TransactionRepository
 }
 
 func NewDistributionTrx() DistributionTrx {
 	return DistributionTrx{
-		accountRepo: repository.NewAccountRepository(),
-		trxRepo:     repository.NewTransactionRepository(),
+		accountRepo:     repository.NewAccountRepository(),
+		transactionRepo: repository.NewTransactionRepository(),
 	}
 }
 
@@ -40,43 +40,52 @@ func (d *DistributionTrx) DoBalanceDistribution(data *entity.BalanceTransaction)
 	}
 
 	// pipeline 1: job distribution
-	chanJobIndex := generateDataIndexes(members)
+	chanJobIndex := generateWorkerData(members)
 
 	// pipeline 2: update balance
 	workerCount := 10
 	tWorker := len(members) / 4
 
 	if tWorker < 10 {
-		workerCount = 2
+		workerCount = 5
 	}
 
 	chanUpdateResult := d.doBatchUpdateBalance(chanJobIndex, workerCount, data)
 
+	totalJob := 0
+	successJob := 0
+	successProduce := 0
 	for result := range chanUpdateResult {
 		if result.Err != nil {
 			utilities.Log.Println("| error on update balance on account id: ", result.Data.ID)
-			continue
+		} else {
+			payload, _ := json.Marshal(result.Data)
+			err = ProduceMsg(topic.DistributionResultMembers, payload)
+			if err != nil {
+				utilities.Log.Printf("| cannot produce message (%s) for topic: %s, with err: %s",
+					result.Data.ReceiptNumber,
+					topic.DistributionResultMembers,
+					err.Error(),
+				)
+			} else {
+				//utilities.Log.Printf("| account balance with id: %s, has been successfully processed with receipt number: %s\n",
+				//	result.Data.ID,
+				//	result.Data.ReceiptNumber,
+				//)
+				successProduce++
+			}
+			successJob++
 		}
-
-		payload, _ := json.Marshal(result.Data)
-		err = ProduceMsg(topic.DistributionResult, payload)
-		if err != nil {
-			utilities.Log.Println("| cannot produce message for topic: ", topic.DistributionResult, ", with err: ", err.Error())
-			continue
-		}
-
-		utilities.Log.Printf("| %s with RefNo: %s, has been successfully processed with receipt number: %s\n",
-			"balance distribution",
-			result.Data.ReferenceNo,
-			result.Data.ReceiptNumber,
-		)
-
+		totalJob++
 	}
+
+	utilities.Log.Printf("| %d/%d of member balances has been successfully updated", successJob, totalJob)
+	utilities.Log.Printf("| %d/%d of success messages has been successfully produced", successProduce, successJob)
 
 	return nil
 }
 
-func (d *DistributionTrx) doBatchUpdateBalance(chanIn <-chan entity.AccountBalanceDistInfo, workerCount int, data *entity.BalanceTransaction) <-chan entity.BalanceDistributionInfo {
+func (d *DistributionTrx) doBatchUpdateBalance(chanIn <-chan entity.AccountBalance, workerCount int, data *entity.BalanceTransaction) <-chan entity.BalanceDistributionInfo {
 	chanOut := make(chan entity.BalanceDistributionInfo)
 
 	wgUpdateBalance := new(sync.WaitGroup)
@@ -84,41 +93,40 @@ func (d *DistributionTrx) doBatchUpdateBalance(chanIn <-chan entity.AccountBalan
 
 	go func() {
 		for workerIdx := 0; workerIdx < workerCount; workerIdx++ {
-			go func(workerIdx int) {
-				for distInfo := range chanIn {
+			go func(idx int) {
+				for accountBalance := range chanIn {
 
 					// update balance
-					distInfo.Account.LastBalanceNumeric += data.Items[0].Amount
+					accountBalance.LastBalanceNumeric += data.Items[0].Amount
 					encrypted, err := crypt.Encrypt(
-						[]byte(distInfo.Account.SecretKey),
-						fmt.Sprintf("%016s", strconv.FormatInt(distInfo.Account.LastBalanceNumeric, 10)),
+						[]byte(accountBalance.SecretKey),
+						fmt.Sprintf("%016s", strconv.FormatInt(accountBalance.LastBalanceNumeric, 10)),
 					)
 					if err != nil {
 						encrypted = "-"
 					}
 
-					distInfo.Account.LastBalance = encrypted
+					accountBalance.LastBalance = encrypted
 
-					//t := NewTransactionHandler()
-					d.trxRepo.Entity = new(entity.BalanceTransaction) // distInfo.Account
-					d.trxRepo.Entity.MerchantID = distInfo.Account.MerchantID
-					d.trxRepo.Entity.PartnerID = distInfo.Account.PartnerID
-					d.trxRepo.Entity.TerminalID = distInfo.Account.TerminalID
-					d.trxRepo.Entity.LastBalance = distInfo.Account.LastBalanceNumeric
-					d.trxRepo.Entity.LastBalanceEncrypted = encrypted
+					d.transactionRepo.Entity = new(entity.BalanceTransaction)
+					d.transactionRepo.Entity.MerchantID = accountBalance.MerchantID
+					d.transactionRepo.Entity.PartnerID = accountBalance.PartnerID
+					d.transactionRepo.Entity.TerminalID = accountBalance.TerminalID
+					d.transactionRepo.Entity.LastBalance = accountBalance.LastBalanceNumeric
+					d.transactionRepo.Entity.LastBalanceEncrypted = encrypted
 
-					updAccount, err := d.trxRepo.UpdateBalance()
-					trxDate := time.Now()
+					account, err := d.transactionRepo.UpdateBalance()
 
 					// populate chanOut Data
 					var items []entity.TransactionItem
 					items = append(items, entity.TransactionItem{
-						Name:   "Receiving Balance From: " + updAccount.PartnerID + "-" + updAccount.MerchantID,
+						Name:   "Receiving Balance From: " + account.PartnerID + "-" + account.MerchantID,
 						Amount: data.Items[0].Amount,
 						Qty:    1,
 					})
 
-					//utilities.Log.Println("| worker", workerIdx, "working on update Account Balance ID: ", updAccount.ID)
+					trxDate := time.Now()
+					//utilities.Log.Println("| using worker", idx, "to update account balance with id: ", account.ID)
 
 					chanOut <- entity.BalanceDistributionInfo{
 						Data: entity.BalanceTransaction{
@@ -126,21 +134,21 @@ func (d *DistributionTrx) doBatchUpdateBalance(chanIn <-chan entity.AccountBalan
 							TransDateNumeric: trxDate.UnixMilli(),
 							ReferenceNo:      data.ReferenceNo,
 							ReceiptNumber:    str.GenerateReceiptNumber(data.TransType, ""),
-							LastBalance:      updAccount.LastBalanceNumeric,
+							LastBalance:      account.LastBalanceNumeric,
 							Status:           data.Status,
 							TransType:        data.TransType,
 							PartnerTransDate: data.PartnerTransDate,
 							PartnerRefNumber: data.PartnerRefNumber,
-							PartnerID:        updAccount.PartnerID,
-							MerchantID:       updAccount.MerchantID,
-							TerminalID:       updAccount.TerminalID,
-							TerminalName:     updAccount.TerminalName,
+							PartnerID:        account.PartnerID,
+							MerchantID:       account.MerchantID,
+							TerminalID:       account.TerminalID,
+							TerminalName:     account.TerminalName,
 							TotalAmount:      data.Items[0].Amount,
 							Items:            items,
 							CreatedAt:        trxDate.UnixMilli(),
 							UpdatedAt:        trxDate.UnixMilli(),
 						},
-						WorkerIndex: workerIdx,
+						WorkerIndex: idx,
 						Err:         err,
 					}
 				}
@@ -157,15 +165,12 @@ func (d *DistributionTrx) doBatchUpdateBalance(chanIn <-chan entity.AccountBalan
 	return chanOut
 }
 
-func generateDataIndexes(members []entity.AccountBalance) <-chan entity.AccountBalanceDistInfo {
-	chanOut := make(chan entity.AccountBalanceDistInfo)
+func generateWorkerData(members []entity.AccountBalance) <-chan entity.AccountBalance {
+	chanOut := make(chan entity.AccountBalance)
 
 	go func() {
 		for i := 0; i < len(members); i++ {
-			chanOut <- entity.AccountBalanceDistInfo{
-				Index:   i,
-				Account: &members[i],
-			}
+			chanOut <- members[i]
 		}
 
 		close(chanOut)

@@ -55,10 +55,3 @@ type UnregisterAccount struct {
 	CreatedAt         string `json:"createdAt,omitempty" bson:"createdAt,omitempty"`
 	UpdatedAt         string `json:"updatedAt,omitempty" bson:"updatedAt,omitempty"`
 }
-
-type AccountBalanceDistInfo struct {
-	Index       int
-	Account     *AccountBalance
-	WorkerIndex int
-	Err         error
-}

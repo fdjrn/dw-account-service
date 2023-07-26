@@ -50,7 +50,7 @@ func Initialize() error {
 
 func ProduceMsg(topic string, payload []byte) error {
 	utilities.Log.SetPrefix("[PRODUCER] ")
-	partition, offset, err := Producer.SendMessage(&sarama.ProducerMessage{
+	_, _, err := Producer.SendMessage(&sarama.ProducerMessage{
 		Topic: topic,
 		Key:   sarama.StringEncoder(str.GetUnixTime()),
 		Value: sarama.StringEncoder(payload),
@@ -60,6 +60,6 @@ func ProduceMsg(topic string, payload []byte) error {
 		return err
 	}
 
-	utilities.Log.Printf("| message successfully wrote at partition: %d, offset: %d\n", partition, offset)
+	//utilities.Log.Printf("| message successfully wrote at partition: %d, offset: %d\n", partition, offset)
 	return nil
 }

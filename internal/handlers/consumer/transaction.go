@@ -88,12 +88,9 @@ func (t *TransactionHandler) doValidation(data *entity.BalanceTransaction) (*ent
 
 		data.TotalAmount = memberCount * data.Items[0].Amount
 		data.Items[0].Qty = int(memberCount)
-
 	}
 
-	if data.TransType > utilities.TransTypeTopUp && data.LastBalance < data.TotalAmount {
-		// avoid update balance.
-		// return entity.BalanceTransaction data with status Insufficient Funds ("06")
+	if data.TransType != utilities.TransTypeTopUp && data.LastBalance < data.TotalAmount {
 		data.Status = utilities.TrxStatusInsufficientFund
 		return data, errors.New("insufficient account balance")
 	}
