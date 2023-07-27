@@ -59,8 +59,7 @@ func HandleMessages(message *sarama.ConsumerMessage) {
 	if trx.TransType == utilities.TransTypeDistribution && trx.Status == utilities.TrxStatusSuccess {
 		start := time.Now()
 		utilities.Log.Println("| starting merchant balance distribution ... ")
-		t := NewDistributionTrx()
-		err = t.DoBalanceDistribution(trx)
+		err = DoBalanceDistribution(trx)
 		if err != nil {
 			utilities.Log.Println("| error occurred: ", err.Error())
 		}

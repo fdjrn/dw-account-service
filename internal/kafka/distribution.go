@@ -19,14 +19,8 @@ type DistributionTrx struct {
 	transactionRepo repository.TransactionRepository
 }
 
-func NewDistributionTrx() DistributionTrx {
-	return DistributionTrx{
-		accountRepo:     repository.NewAccountRepository(),
-		transactionRepo: repository.NewTransactionRepository(),
-	}
-}
-
-func (d *DistributionTrx) DoBalanceDistribution(data *entity.BalanceTransaction) error {
+func DoBalanceDistribution(data *entity.BalanceTransaction) error {
+	accountRepo := repository.NewAccountRepository()
 
 	params := new(entity.PaginatedAccountRequest)
 	params.PartnerID = data.PartnerID
@@ -34,7 +28,7 @@ func (d *DistributionTrx) DoBalanceDistribution(data *entity.BalanceTransaction)
 	params.Type = utilities.AccountTypeRegular
 	params.Status = utilities.AccountStatusActive
 
-	members, err := d.accountRepo.FindMembers(params)
+	members, err := accountRepo.FindMembers(params)
 	if err != nil {
 		return err
 	}
@@ -50,7 +44,7 @@ func (d *DistributionTrx) DoBalanceDistribution(data *entity.BalanceTransaction)
 		workerCount = 5
 	}
 
-	chanUpdateResult := d.doBatchUpdateBalance(chanJobIndex, workerCount, data)
+	chanUpdateResult := doBatchUpdateBalance(chanJobIndex, workerCount, data)
 
 	totalJob := 0
 	successJob := 0
@@ -85,7 +79,7 @@ func (d *DistributionTrx) DoBalanceDistribution(data *entity.BalanceTransaction)
 	return nil
 }
 
-func (d *DistributionTrx) doBatchUpdateBalance(chanIn <-chan entity.AccountBalance, workerCount int, data *entity.BalanceTransaction) <-chan entity.BalanceDistributionInfo {
+func doBatchUpdateBalance(chanIn <-chan entity.AccountBalance, workerCount int, data *entity.BalanceTransaction) <-chan entity.BalanceDistributionInfo {
 	chanOut := make(chan entity.BalanceDistributionInfo)
 
 	wgUpdateBalance := new(sync.WaitGroup)
@@ -95,6 +89,7 @@ func (d *DistributionTrx) doBatchUpdateBalance(chanIn <-chan entity.AccountBalan
 		for workerIdx := 0; workerIdx < workerCount; workerIdx++ {
 			go func(idx int) {
 				for accountBalance := range chanIn {
+					transactionRepo := repository.NewTransactionRepository()
 
 					// update balance
 					accountBalance.LastBalanceNumeric += data.Items[0].Amount
@@ -105,17 +100,16 @@ func (d *DistributionTrx) doBatchUpdateBalance(chanIn <-chan entity.AccountBalan
 					if err != nil {
 						encrypted = "-"
 					}
-
 					accountBalance.LastBalance = encrypted
 
-					d.transactionRepo.Entity = new(entity.BalanceTransaction)
-					d.transactionRepo.Entity.MerchantID = accountBalance.MerchantID
-					d.transactionRepo.Entity.PartnerID = accountBalance.PartnerID
-					d.transactionRepo.Entity.TerminalID = accountBalance.TerminalID
-					d.transactionRepo.Entity.LastBalance = accountBalance.LastBalanceNumeric
-					d.transactionRepo.Entity.LastBalanceEncrypted = encrypted
+					transactionRepo.Entity.MerchantID = accountBalance.MerchantID
+					transactionRepo.Entity.PartnerID = accountBalance.PartnerID
+					transactionRepo.Entity.TerminalID = accountBalance.TerminalID
+					transactionRepo.Entity.LastBalance = accountBalance.LastBalanceNumeric
+					transactionRepo.Entity.LastBalanceEncrypted = encrypted
 
-					account, err := d.transactionRepo.UpdateBalance()
+					trxDate := time.Now()
+					account, err := transactionRepo.UpdateBalance()
 
 					// populate chanOut Data
 					var items []entity.TransactionItem
@@ -124,9 +118,6 @@ func (d *DistributionTrx) doBatchUpdateBalance(chanIn <-chan entity.AccountBalan
 						Amount: data.Items[0].Amount,
 						Qty:    1,
 					})
-
-					trxDate := time.Now()
-					//utilities.Log.Println("| using worker", idx, "to update account balance with id: ", account.ID)
 
 					chanOut <- entity.BalanceDistributionInfo{
 						Data: entity.BalanceTransaction{
@@ -169,8 +160,8 @@ func generateWorkerData(members []entity.AccountBalance) <-chan entity.AccountBa
 	chanOut := make(chan entity.AccountBalance)
 
 	go func() {
-		for i := 0; i < len(members); i++ {
-			chanOut <- members[i]
+		for _, member := range members {
+			chanOut <- member
 		}
 
 		close(chanOut)
