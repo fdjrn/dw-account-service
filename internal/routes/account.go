@@ -6,44 +6,50 @@ import (
 )
 
 func initAccountRoutes(router fiber.Router) {
-	r := router.Group("/account")
+	accountHandler := handlers.NewAccountHandler()
 
-	r.Post("/register", func(c *fiber.Ctx) error {
-		return handlers.Register(c)
+	accountRoutes := router.Group("/account")
+
+	accountRoutes.Post("/register", func(c *fiber.Ctx) error {
+		return accountHandler.Register(c)
 	})
 
-	r.Post("/unregister", func(c *fiber.Ctx) error {
-		return handlers.Unregister(c)
+	accountRoutes.Post("/unregister", func(c *fiber.Ctx) error {
+		return accountHandler.Unregister(c)
 	})
 
-	// ---------------------------------------------------------------------------------------------------------------
-	// it can use query params to filter their active status
-	// example:
-	// api/v1/account?active=true 	--> to fetch only active account
-	// api/v1/account?active=false --> to fetch only unregistered account
-	// api/v1/account 				--> to fetch all registered account whether its active or unregistered
-	// ---------------------------------------------------------------------------------------------------------------
-	// -- DEPRECATED --
-	// ---------------------------------------------------------------------------------------------------------------
-	r.Get("", func(c *fiber.Ctx) error {
-		//return handlers.GetAllRegisteredAccount(c)
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"success": false,
-			"message": "-- deprecated --",
-			"data":    nil,
-		})
+	accountRoutes.Post("/all", func(c *fiber.Ctx) error {
+		return accountHandler.GetAccountsPaginated(c)
 	})
 
-	r.Post("/all", func(c *fiber.Ctx) error {
-		return handlers.GetAllRegisteredAccountPaginated(c)
+	accountRoutes.Get("/:id", func(c *fiber.Ctx) error {
+		return accountHandler.GetAccountByID(c)
 	})
 
-	r.Get("/:id", func(c *fiber.Ctx) error {
-		return handlers.GetRegisteredAccount(c)
+	accountRoutes.Post("/detail", func(c *fiber.Ctx) error {
+		return accountHandler.GetAccount(c)
 	})
 
-	r.Get("/uid/:uid", func(c *fiber.Ctx) error {
-		return handlers.GetRegisteredAccountByUID(c)
+	// -------------------------- Merchants --------------------------
+
+	merchantRoutes := router.Group("/merchant")
+
+	merchantRoutes.Post("/members", func(c *fiber.Ctx) error {
+		return accountHandler.GetMerchantMembers(c, false)
+	})
+
+	merchantRoutes.Post("/members/period", func(c *fiber.Ctx) error {
+		return accountHandler.GetMerchantMembers(c, true)
+	})
+
+	// -------------------------- TOOLS --------------------------
+
+	accountRoutes.Post("/update-merchant-and-terminal", func(c *fiber.Ctx) error {
+		return accountHandler.UpdateMerchantAndTerminalForAccount(c)
+	})
+
+	accountRoutes.Post("/sync-balance", func(c *fiber.Ctx) error {
+		return accountHandler.SyncBalance(c)
 	})
 
 }

@@ -3,7 +3,7 @@ package internal
 import (
 	"github.com/dw-account-service/internal/db"
 	"github.com/dw-account-service/internal/kafka"
-	"github.com/dw-account-service/pkg/xlogger"
+	"github.com/dw-account-service/internal/utilities"
 	"log"
 	"os"
 	"os/signal"
@@ -12,16 +12,16 @@ import (
 
 func ExitGracefully() {
 	// close mongodb connection
-	xlogger.Log.SetPrefix("[EXIT-APP] ")
+	utilities.Log.SetPrefix("[EXIT-APP] ")
 	if err := db.Mongo.Disconnect(); err != nil {
 		log.Println(err.Error())
 		return
 	}
-	xlogger.Log.Println("| db connection successfully closed")
+	utilities.Log.Println("| db connection successfully closed")
 
 	// close kafka connection
 	_ = kafka.Producer.Close()
-	xlogger.Log.Println("| kafka producer successfully closed")
+	utilities.Log.Println("| kafka producer successfully closed")
 }
 
 // SetupCloseHandler :
@@ -31,8 +31,8 @@ func SetupCloseHandler() {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
-		xlogger.Log.SetPrefix("[EXIT-APP] ")
-		xlogger.Log.Println("| Ctrl+C pressed in Terminal,... Good Bye...")
+		utilities.Log.SetPrefix("[EXIT-APP] ")
+		utilities.Log.Println("| Ctrl+C pressed in Terminal,... Good Bye...")
 		ExitGracefully()
 		os.Exit(0)
 	}()

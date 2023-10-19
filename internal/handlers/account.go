@@ -1,212 +1,252 @@
 package handlers
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"github.com/dw-account-service/internal/db"
 	"github.com/dw-account-service/internal/db/entity"
 	"github.com/dw-account-service/internal/db/repository"
-	"github.com/dw-account-service/pkg/payload/request"
-	"github.com/dw-account-service/pkg/tools"
+	"github.com/dw-account-service/internal/handlers/validator"
+	"github.com/dw-account-service/internal/utilities"
+	"github.com/dw-account-service/internal/utilities/crypt"
 	"github.com/gofiber/fiber/v2"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"strings"
 	"time"
 )
 
-// isRegistered is a private function that check whether account id has been registered based on phoneNumber
-func isRegistered(uniqueId string) bool {
-	_, _, err := repository.AccountRepository.FindByUniqueID(uniqueId, true)
-	if err != nil {
-		// no document found, its mean it can be registered
-		if err == mongo.ErrNoDocuments {
-			return false
-		}
-
-		// TODO handling unknown error
-		return true
-	}
-	return true
+type AccountHandler struct {
+	repo        repository.AccountRepository
+	balanceRepo repository.BalanceRepository
 }
 
-// isUnregistered is a private function that check whether account id has been unregistered or not
-func isUnregistered(uniqueId string) bool {
-	_, _, err := repository.AccountRepository.FindByActiveStatus(uniqueId, false)
-	if err != nil {
-		// no document found, its mean it can be unregistered
-		if err == mongo.ErrNoDocuments {
-			return false
-		}
-
-		// TODO handling unknown error
-		return true
+func NewAccountHandler() AccountHandler {
+	return AccountHandler{
+		repo:        repository.NewAccountRepository(),
+		balanceRepo: repository.NewBalanceRepository(),
 	}
-	return true
 }
 
-// Register is a function that used to insert new document into collection and set active status to true.
-func Register(c *fiber.Ctx) error {
+func (a *AccountHandler) existsAccount() (bool, error) {
+	_, err := a.repo.FindOne()
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (a *AccountHandler) Register(c *fiber.Ctx) error {
 	var err error
 
 	// new account struct
-	a := new(entity.AccountBalance)
+	payload := new(entity.AccountBalance)
 
 	// parse body payload
-	if err = c.BodyParser(a); err != nil {
-		return c.Status(400).JSON(Responses{
+	if err = c.BodyParser(payload); err != nil {
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
 		})
 	}
 
-	if isRegistered(a.UniqueID) {
-		return c.Status(400).JSON(Responses{
-			Success: false,
-			Message: "uniqueId has already been registered",
-			Data:    a,
-		})
-	}
-
 	// validate request
-	m, err := tools.ValidateRequest(a)
+	validation, err := validator.ValidateRequest(payload)
 	if err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data: map[string]interface{}{
-				"errors": m,
+				"errors": validation,
 			},
 		})
 	}
 
 	// set default value for accountBalance document
-	key, _ := tools.GenerateSecretKey()
-	encryptedBalance, _ := tools.Encrypt([]byte(key), fmt.Sprintf("%016s", "0"))
+	key, _ := crypt.GenerateSecretKey()
+	encryptedBalance, _ := crypt.Encrypt([]byte(key), fmt.Sprintf("%016s", "0"))
 
-	a.ID = ""
-	a.SecretKey = key
-	a.Active = true
-	a.LastBalance = encryptedBalance
+	payload.SecretKey = key
+	payload.Active = true
+	payload.UniqueID = fmt.Sprintf("%s%s", payload.MerchantID, payload.TerminalID)
+	if payload.Type == utilities.AccountTypeMerchant {
+		payload.UniqueID = ""
+		payload.TerminalID = ""
+		payload.TerminalName = ""
+	}
 
-	//a.MainAccountID = "-"
-	a.CreatedAt = time.Now().UnixMilli()
-	a.UpdatedAt = a.CreatedAt
+	payload.LastBalance = encryptedBalance
+	payload.LastBalanceNumeric = 0
+	payload.CreatedAt = time.Now().UnixMilli()
+	payload.UpdatedAt = payload.CreatedAt
 
-	code, id, err := repository.AccountRepository.InsertDocument(a)
-	if err != nil {
-		return c.Status(code).JSON(Responses{
+	a.repo.Entity = payload
+
+	exists, err := a.existsAccount()
+	if !exists && err != nil {
+		return SendDefaultErrResponse("failed to validate existing account, ", err, c)
+	}
+
+	if exists {
+		responseData := map[string]interface{}{"partnerId": payload.PartnerID, "merchantId": payload.MerchantID}
+
+		if payload.Type == utilities.AccountTypeRegular {
+			responseData["terminalId"] = payload.TerminalID
+		}
+
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
-			Message: err.Error(),
-			Data:    nil,
+			Message: "account already exists, or its probably in deactivated status. ",
+			Data:    responseData,
 		})
 	}
 
-	_, createdAccount, _ := repository.AccountRepository.FindByID(id, true)
+	insertedId, err := a.repo.Create()
+	if err != nil {
+		return SendDefaultErrResponse("", err, c)
+	}
 
-	return c.Status(code).JSON(Responses{
+	createdAccount, err := a.repo.FindByID(insertedId)
+	if err != nil {
+		return SendDefaultErrResponse("cannot fetch current registered account, ", err, c)
+	}
+
+	return c.Status(201).JSON(entity.Responses{
 		Success: true,
-		Message: "account successfully registered",
+		Message: "registration successful",
 		Data:    createdAccount,
 	})
 }
 
-// Unregister is a function that used to change active status to false (unregistered)
-func Unregister(c *fiber.Ctx) error {
+func (a *AccountHandler) Unregister(c *fiber.Ctx) error {
 
-	// new u struct
-	u := new(entity.UnregisterAccount)
+	// new UnregisterAccount struct
+	payload := new(entity.UnregisterAccount)
 
 	// parse body payload
-	if err := c.BodyParser(u); err != nil {
-		return c.Status(400).JSON(Responses{
+	if err := c.BodyParser(payload); err != nil {
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
 		})
 	}
 
-	// check if already been unregistered
-	if isUnregistered(u.UniqueID) {
-		return c.Status(400).JSON(Responses{
+	// check is valid account
+	a.repo.Entity.PartnerID = payload.PartnerID
+	a.repo.Entity.MerchantID = payload.MerchantID
+	a.repo.Entity.TerminalID = payload.TerminalID
+
+	exists, err := a.existsAccount()
+	if !exists {
+		if err != nil {
+			return SendDefaultErrResponse("failed to validate existing account, ", err, c)
+		}
+
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
-			Message: "account has already been unregistered",
-			Data:    u,
-		})
-	}
-	code, err := repository.AccountRepository.DeactivateAccount(u)
-	if err != nil {
-		return c.Status(code).JSON(Responses{
-			Success: false,
-			Message: err.Error(),
+			Message: "account not found",
 			Data:    nil,
 		})
+	}
+
+	err = a.repo.DeactivateAccount(payload)
+	if err != nil {
+		return SendDefaultErrResponse("", err, c)
 	}
 
 	// insert into accountDeactivated collection
-	code, _, err = repository.AccountRepository.InsertDeactivatedAccount(u)
+	auditLog := time.Now().Format("2006-01-02 15:04:05")
+	payload.CreatedAt = auditLog
+	payload.UpdatedAt = auditLog
 
-	_, updatedAccount, _ := repository.AccountRepository.FindByUniqueID(u.UniqueID, false)
+	//var acc entity.AccountBalance
+	doc, _ := a.repo.FindOne()
+	payload.Type = doc.Type
+	payload.UniqueID = doc.UniqueID
 
-	return c.Status(code).JSON(Responses{
+	_, err = a.repo.InsertDeactivatedAccount(payload)
+	if err != nil {
+		return SendDefaultErrResponse("failed on insert deactivated account data, ", err, c)
+	}
+
+	return c.Status(200).JSON(entity.Responses{
 		Success: true,
-		Message: "account successfully unregistered",
-		Data:    updatedAccount,
+		Message: "deactivation successful",
+		Data:    doc,
 	})
 }
 
-// GetAllRegisteredAccount
-// is used to find all registered account and can be filtered with their active status
-// [DEPRECATED]
-// ------------------------------------------------------------------------------------------------------
-/*func GetAllRegisteredAccount(c *fiber.Ctx) error {
-	accountStatus := ""
-	queryParams := c.Query("active")
-	if queryParams != "" {
-		switch strings.ToLower(queryParams) {
-		case "true":
-			accountStatus = "active "
-		case "false":
-			accountStatus = "unregistered "
-		default:
-			return c.Status(fiber.StatusBadRequest).JSON(Responses{
-				Success: false,
-				Message: "invalid query param value, expected value is true or false",
-				Data:    nil,
-			})
-		}
+func (a *AccountHandler) GetAccountByID(c *fiber.Ctx) error {
+	id, _ := primitive.ObjectIDFromHex(c.Params("id"))
+	account, err := a.repo.FindByID(id)
+
+	if err != nil {
+		return SendDefaultErrResponse("failed to fetch account, ", err, c)
 	}
 
-	code, accounts, count, err := repository.AccountRepository.FindAll(queryParams)
-	if err != nil {
-		return c.Status(code).JSON(ResponsePayload{
+	return c.Status(200).JSON(entity.Responses{
+		Success: true,
+		Message: "account fetched successfully ",
+		Data:    account,
+	})
+
+}
+
+func (a *AccountHandler) GetAccount(c *fiber.Ctx) error {
+
+	// new account struct
+	payload := new(entity.AccountBalance)
+
+	// parse body payload
+	if err := c.BodyParser(&payload); err != nil {
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
-			Data: ResponsePayloadData{
-				Total:  0,
-				Result: nil,
+			Data:    nil,
+		})
+	}
+
+	// validate request
+	validation, err := validator.ValidateRequest(payload)
+	if err != nil {
+		return c.Status(400).JSON(entity.Responses{
+			Success: false,
+			Message: err.Error(),
+			Data: map[string]interface{}{
+				"errors": validation,
 			},
 		})
 	}
 
-	msgResponse := fmt.Sprintf("%saccounts fetched successfully ", accountStatus)
+	a.repo.Entity = payload
+	account, err := a.repo.FindOne()
 
-	return c.Status(code).JSON(Responses{
+	if err != nil {
+		return SendDefaultErrResponse("failed to fetch account, ", err, c)
+	}
+
+	return c.Status(200).JSON(entity.Responses{
 		Success: true,
-		Message: msgResponse,
-		Data: ResponsePayloadData{
-			Total:  count,
-			Result: accounts,
-		},
+		Message: "account fetched successfully ",
+		Data:    account,
 	})
-}*/
 
-func GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
+}
 
-	var req = new(request.PaginatedAccountRequest)
+func (a *AccountHandler) GetAccountsPaginated(c *fiber.Ctx) error {
+
+	var req = new(entity.PaginatedAccountRequest)
 
 	// parse body payload
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(Responses{
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
@@ -216,19 +256,19 @@ func GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
 	msgResponse := "accounts successfully fetched"
 	req.Status = strings.ToLower(req.Status)
 
-	validStatus := map[string]interface{}{"all": 0, "active": 1, "unregistered": 2}
+	validStatus := map[string]interface{}{"all": 0, "active": 1, "deactivated": 2}
 	if req.Status != "" {
 		if _, ok := validStatus[req.Status]; !ok {
-			return c.Status(400).JSON(Responses{
+			return c.Status(400).JSON(entity.Responses{
 				Success: false,
-				Message: "invalid status value. its only accept all, active or unregistered",
+				Message: "invalid status value. its only accept all, active or deactivated",
 				Data:    nil,
 			})
 		}
 		msgResponse = fmt.Sprintf("%s account successfully fetched", req.Status)
 	}
 
-	// set default value
+	// set default param value
 	if req.Page == 0 {
 		req.Page = 1
 	}
@@ -237,74 +277,279 @@ func GetAllRegisteredAccountPaginated(c *fiber.Ctx) error {
 		req.Size = 10
 	}
 
-	code, accounts, total, pages, err := repository.AccountRepository.FindAllPaginated(req)
+	accounts, total, pages, err := a.repo.FindAllPaginated(req)
 	if err != nil {
-		return c.Status(code).JSON(ResponsePayloadPaginated{
-			Success: false,
-			Message: err.Error(),
-			Data:    ResponsePayloadDataPaginated{},
-		})
+		return SendDefaultPaginationErrResponse("", err, c)
 	}
 
-	return c.Status(code).JSON(ResponsePayloadPaginated{
+	return c.Status(200).JSON(entity.PaginatedResponse{
 		Success: true,
 		Message: msgResponse,
-		Data: ResponsePayloadDataPaginated{
-			Result:      accounts,
-			Total:       total,
-			PerPage:     req.Size,
-			CurrentPage: req.Page,
-			LastPage:    pages,
+		Data: entity.PaginatedDetailResponse{
+			Result: accounts,
+			Total:  total,
+			Pagination: entity.PaginationInfo{
+				PerPage:     req.Size,
+				CurrentPage: req.Page,
+				LastPage:    pages,
+			},
 		},
 	})
 }
 
-// GetRegisteredAccount is used to find registered account with active status = true
-func GetRegisteredAccount(c *fiber.Ctx) error {
-	id, _ := primitive.ObjectIDFromHex(c.Params("id"))
-	code, account, err := repository.AccountRepository.FindByID(id, true)
+// ----------------- Merchants -----------------
 
-	if err != nil {
-		errMsg := err.Error()
-		if err == mongo.ErrNoDocuments {
-			errMsg = "account not found or its already been unregistered"
-		}
-		return c.Status(code).JSON(Responses{
+func (a *AccountHandler) GetMerchantMembers(c *fiber.Ctx, isPeriod bool) error {
+	var err error
+
+	// new account struct
+	payload := new(entity.PaginatedAccountRequest)
+	// parse body payload
+	if err = c.BodyParser(payload); err != nil {
+		return c.Status(400).JSON(entity.Responses{
 			Success: false,
-			Message: errMsg,
+			Message: err.Error(),
 			Data:    nil,
 		})
 	}
 
-	return c.Status(code).JSON(Responses{
+	// validate periods parameter
+	if isPeriod {
+		payload.Periods.StartDate, err = time.ParseInLocation(
+			"20060102150405",
+			fmt.Sprintf("%s%s", payload.Periods.Start, "000000"),
+			time.Now().Location(),
+		)
+		if err != nil {
+			return c.Status(400).JSON(entity.Responses{
+				Success: false,
+				Message: "invalid start periods",
+				Data:    nil,
+			})
+		}
+
+		payload.Periods.EndDate, err = time.ParseInLocation(
+			"20060102150405",
+			fmt.Sprintf("%s%s", payload.Periods.End, "235959"),
+			time.Now().Location(),
+		)
+
+		if err != nil {
+			return c.Status(400).JSON(entity.Responses{
+				Success: false,
+				Message: "invalid end periods",
+				Data:    nil,
+			})
+		}
+
+		if payload.Periods.EndDate.Before(payload.Periods.StartDate) {
+			return c.Status(400).JSON(entity.Responses{
+				Success: false,
+				Message: "end period cannot be less than start period",
+				Data:    nil,
+			})
+		}
+	}
+
+	// set type for payload validation
+	payload.Type = utilities.AccountTypeMerchant
+
+	// validate request
+	if payload.PartnerID == "" {
+		return c.Status(400).JSON(entity.PaginatedResponseMembers{
+			Success: false,
+			Message: "partnerId cannot be empty",
+			Data:    nil,
+		})
+	}
+
+	if payload.MerchantID == "" {
+		return c.Status(400).JSON(entity.PaginatedResponseMembers{
+			Success: false,
+			Message: "merchantId cannot be empty",
+			Data:    nil,
+		})
+	}
+
+	// set default value
+	if payload.Page == 0 {
+		payload.Page = 1
+	}
+
+	if payload.Size == 0 {
+		payload.Size = 10
+	}
+
+	// re-apply type for filter condition
+	payload.Type = utilities.AccountTypeRegular
+
+	members, total, pages, err := a.repo.FindMembersPaginated(payload, isPeriod)
+
+	if err != nil {
+		return SendDefaultPaginationErrResponse("cannot fetch members, ", err, c)
+	}
+
+	a.balanceRepo.Entity.MerchantID = payload.MerchantID
+	a.balanceRepo.Entity.PartnerID = payload.PartnerID
+	a.balanceRepo.Entity.Type = utilities.AccountTypeMerchant
+	err = a.balanceRepo.GetLastBalance()
+	if err != nil {
+		return SendDefaultPaginationErrResponse("cannot get merchant curren balance, ", err, c)
+	}
+
+	return c.Status(200).JSON(entity.PaginatedResponseMembers{
 		Success: true,
-		Message: "account fetched successfully ",
-		Data:    account,
+		Message: "members successfully fetched",
+		Data: &entity.PaginatedResponseMemberDetails{
+			Total:       total,
+			LastBalance: a.balanceRepo.Entity.LastBalance,
+			Result:      members,
+			Pagination: entity.PaginationInfo{
+				PerPage:     payload.Size,
+				CurrentPage: payload.Page,
+				LastPage:    pages,
+			},
+		},
 	})
 
 }
 
-// GetRegisteredAccountByUID is used to find registered account based on uniqueId
-func GetRegisteredAccountByUID(c *fiber.Ctx) error {
-	code, account, err := repository.AccountRepository.FindByActiveStatus(c.Params("uid"), true)
+// ----------------- utilities -----------------
 
+func (a *AccountHandler) UpdateMerchantAndTerminalForAccount(c *fiber.Ctx) error {
+
+	filter := bson.D{
+		{"merchantId", primitive.Null{}},
+		{"terminalId", primitive.Null{}},
+		{"type", 1},
+		{"uniqueId", bson.D{{"$ne", primitive.Null{}}}},
+	}
+
+	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	defer cancel()
+
+	cursor, err := db.Mongo.Collection.Account.Find(
+		ctx,
+		filter,
+	)
 	if err != nil {
-		errMsg := err.Error()
-		if err == mongo.ErrNoDocuments {
-			errMsg = "account not found or its already been unregistered"
-		}
-
-		return c.Status(code).JSON(Responses{
-			Success: false,
-			Message: errMsg,
-			Data:    nil,
+		return c.Status(500).JSON(fiber.Map{
+			"success": true,
+			"message": err.Error(),
+			"count":   0,
+			"data":    nil,
 		})
 	}
 
-	return c.Status(code).JSON(Responses{
-		Success: true,
-		Message: "account fetched successfully ",
-		Data:    account,
+	var accounts []entity.AccountBalance
+	if err = cursor.All(context.TODO(), &accounts); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"success": true,
+			"message": err.Error(),
+			"count":   0,
+			"data":    nil,
+		})
+	}
+
+	//var arrAccount []entity.AccountBalance
+	var successCount int64
+	for _, account := range accounts {
+		str := strings.Split(account.UniqueID, "_")
+		account.TerminalID = str[0]
+		account.MerchantID = str[1]
+
+		result, err2 := db.Mongo.Collection.Account.UpdateOne(context.TODO(),
+			filter,
+			bson.D{
+				{"$set", bson.D{
+					{"terminalId", str[0]},
+					{"merchantId", str[1]},
+				}},
+			})
+		if err2 != nil {
+			utilities.Log.Println("err: ", err2.Error())
+		}
+
+		//arrAccount = append(arrAccount, account)
+
+		successCount = successCount + result.ModifiedCount
+
+	}
+
+	return c.Status(200).JSON(fiber.Map{
+		"success": true,
+		"message": "ok",
+		"count":   fmt.Sprintf("%d account has been successfully updated", successCount),
+		"data":    nil,
 	})
 
+}
+
+func (a *AccountHandler) SyncBalance(c *fiber.Ctx) error {
+
+	filter := bson.D{
+		//{"merchantId", nil},
+		//{"terminalId", nil},
+		//{"uniqueId", bson.D{{"$ne", nil}}},
+		{"lastBalanceNumeric", primitive.Null{}},
+	}
+
+	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	defer cancel()
+
+	cursor, err := db.Mongo.Collection.Account.Find(
+		ctx,
+		filter,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"success": true,
+			"message": err.Error(),
+			"count":   0,
+			"data":    nil,
+		})
+	}
+
+	var accounts []entity.AccountBalance
+	if err = cursor.All(context.TODO(), &accounts); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"success": true,
+			"message": err.Error(),
+			"count":   0,
+			"data":    nil,
+		})
+	}
+
+	//var arrAccount []entity.AccountBalance
+	var successCount int64
+	for _, account := range accounts {
+		currentBalance, _ := crypt.DecryptAndConvert([]byte(account.SecretKey), account.LastBalance)
+
+		//str := strings.Split(account.UniqueID, "_")
+		//account.TerminalID = str[0]
+		//account.MerchantID = str[1]
+
+		result, err2 := db.Mongo.Collection.Account.UpdateOne(context.TODO(),
+			filter,
+			bson.D{
+				{"$set", bson.D{
+					{"lastBalanceNumeric", int64(currentBalance)},
+				}},
+			})
+		if err2 != nil {
+			utilities.Log.Println("err: ", err2.Error())
+		}
+
+		//	arrAccount = append(arrAccount, account)
+
+		successCount = successCount + result.ModifiedCount
+
+	}
+
+	return c.Status(200).JSON(fiber.Map{
+		"success": true,
+		"message": "ok",
+		"count":   fmt.Sprintf("%d account has been successfully updated", successCount),
+		"data":    nil,
+	})
 }

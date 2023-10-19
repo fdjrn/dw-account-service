@@ -7,7 +7,7 @@ import (
 	"github.com/dw-account-service/internal/db"
 	"github.com/dw-account-service/internal/kafka"
 	"github.com/dw-account-service/internal/routes"
-	"github.com/dw-account-service/pkg/xlogger"
+	"github.com/dw-account-service/internal/utilities"
 	"sync"
 )
 
@@ -20,11 +20,11 @@ func main() {
 	// Service Initialization
 	err = configs.Initialize()
 	if err != nil {
-		xlogger.Log.Fatalln(fmt.Sprintf("error on config initialization: %s", err.Error()))
+		utilities.Log.Fatalln(fmt.Sprintf("error on config initialization: %s", err.Error()))
 	}
 
 	if err = db.Mongo.Connect(); err != nil {
-		xlogger.Log.Fatalln(fmt.Sprintf("error on mongodb connection: %s", err.Error()))
+		utilities.Log.Fatalln(fmt.Sprintf("error on mongodb connection: %s", err.Error()))
 	}
 
 	wg := &sync.WaitGroup{}
@@ -34,17 +34,19 @@ func main() {
 	go func() {
 		err = kafka.Initialize()
 		if err != nil {
-			xlogger.Log.Fatalln(err)
+			utilities.Log.Fatalln(err)
 		}
 		wg.Done()
 	}()
+
+	kafka.StartConsumer()
 
 	// Start Rest API
 	wg.Add(1)
 	go func() {
 		err = routes.Initialize()
 		if err != nil {
-			xlogger.Log.Fatalln(err)
+			utilities.Log.Fatalln(err)
 		}
 
 		wg.Done()

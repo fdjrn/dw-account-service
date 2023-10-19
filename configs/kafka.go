@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/Shopify/sarama"
-	"github.com/dw-account-service/pkg/tools"
+	"github.com/dw-account-service/internal/utilities"
 	"github.com/google/uuid"
 )
 
@@ -23,11 +23,11 @@ func NewSaramaConfig() *sarama.Config {
 	cfg.Net.MaxOpenRequests = 1
 
 	cfg.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA256
-	cfg.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &tools.XDGSCRAMClient{HashGeneratorFcn: tools.SHA256} }
+	cfg.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &utilities.XDGSCRAMClient{HashGeneratorFcn: utilities.SHA256} }
 
 	if MainConfig.Kafka.SASL.Algorithm == "sha512" {
 		cfg.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
-		cfg.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &tools.XDGSCRAMClient{HashGeneratorFcn: tools.SHA512} }
+		cfg.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &utilities.XDGSCRAMClient{HashGeneratorFcn: utilities.SHA512} }
 	}
 
 	cfg.Net.TLS.Enable = MainConfig.Kafka.TLS.Enable
