@@ -2,3 +2,5 @@
 config.json
 /account-service.log
 /logs/
+/config-dev.json
+/config-local.json
