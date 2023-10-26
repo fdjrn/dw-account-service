@@ -29,6 +29,7 @@ type BalanceTransaction struct {
 	Items                []TransactionItem `json:"items" bson:"items"`
 	CreatedAt            int64             `json:"createdAt,omitempty" bson:"createdAt,omitempty"`
 	UpdatedAt            int64             `json:"updatedAt,omitempty" bson:"updatedAt,omitempty"`
+	RequestDetail        RequestDetail     `json:"requestDetail" bson:"requestDetail"`
 }
 
 type BalanceDistributionInfo struct {
@@ -36,4 +37,9 @@ type BalanceDistributionInfo struct {
 	Data        BalanceTransaction
 	WorkerIndex int
 	Err         error
+}
+
+type RequestDetail struct {
+	Origin    string `json:"origin" bson:"origin"`
+	Timestamp string `json:"timestamp,omitempty" bson:"timestamp"`
 }
