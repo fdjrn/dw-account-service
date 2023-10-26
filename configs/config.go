@@ -4,6 +4,7 @@ import (
 	"github.com/dw-account-service/internal/utilities"
 	"github.com/spf13/viper"
 	"log"
+	"os"
 	"strings"
 )
 
@@ -84,6 +85,28 @@ func Initialize() error {
 	if err != nil {
 		return err
 	}
+
+	// --- override config from os-env if its defined ---
+	if os.Getenv("DATABASE_MONGODB_URI") != "" {
+		MainConfig.Database.Mongo.Uri = os.Getenv("DATABASE_MONGODB_URI")
+	}
+
+	if os.Getenv("DATABASE_MONGODB_DB_NAME") != "" {
+		MainConfig.Database.Mongo.DBName = os.Getenv("DATABASE_MONGODB_DB_NAME")
+	}
+
+	if os.Getenv("KAFKA_BROKERS") != "" {
+		MainConfig.Kafka.Brokers = os.Getenv("KAFKA_BROKERS")
+	}
+
+	if os.Getenv("KAFKA_SASL_USER") != "" {
+		MainConfig.Kafka.SASL.SASLUserName = os.Getenv("KAFKA_SASL_USER")
+	}
+
+	if os.Getenv("KAFKA_SASL_PASSWORD") != "" {
+		MainConfig.Kafka.SASL.SASLPassword = os.Getenv("KAFKA_SASL_PASSWORD")
+	}
+	// --- end config overrides ---
 
 	err = (&utilities.AppLogger{
 		LogPath:     MainConfig.LogPath,
